@@ -25,6 +25,11 @@ DENSITY_SEAWATER = 1000.0  # kg/m^3
 CFL_SAFETY_FACTOR = 0.2375
 
 
+def timestep(dx, c=SOUND_SPEED_SEAWATER, cfl=CFL_SAFETY_FACTOR):
+    """The dt a simulation with these parameters will use."""
+    return cfl * dx / (c * math.sqrt(2))
+
+
 @dataclass(frozen=True)
 class Source:
     pos: tuple[float, float]  # (x, y) in meters
@@ -132,7 +137,7 @@ class AcousticFDTD:
         self.xp = xp
         self.nx, self.ny, self.dx = nx, ny, dx
         self.c, self.rho = c, rho
-        self.dt = cfl * dx / (c * math.sqrt(2))
+        self.dt = timestep(dx, c, cfl)
 
         self._open_x = self._open_y = None
         if rigid is not None:
