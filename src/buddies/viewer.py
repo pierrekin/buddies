@@ -7,7 +7,6 @@ import pyqtgraph as pg
 
 from buddies import capture
 
-DEFAULT_RUN = "run.npz"
 DEFAULT_FPS = 60.0
 # Display levels are set to this percentile of |p|. Scaling to the global
 # maximum (the source peak) would render the decaying wavefront nearly
@@ -19,8 +18,10 @@ WINDOW_SIZE = (800, 850)
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("run", nargs="?", default=DEFAULT_RUN, help="capture file to view")
-    ap.add_argument("--fps", type=float, default=DEFAULT_FPS, help="playback rate (frames/s)")
+    ap.add_argument("run", nargs="?", help="capture file to view")
+    ap.add_argument(
+        "--fps", type=float, default=DEFAULT_FPS, help="playback rate (frames/s)"
+    )
     args = ap.parse_args()
 
     cap = capture.load(args.run)
@@ -29,8 +30,7 @@ def main():
     app = pg.mkQApp("FDTD viewer")
     imv = pg.ImageView()
     imv.setWindowTitle(
-        f"{args.run} | {frames.shape[0]} frames | {frames.shape[1]}x{frames.shape[2]} cells | "
-        f"{cap.freq / 1e3:g} kHz"
+        f"{args.run} | {frames.shape[0]} frames | {frames.shape[1]}x{frames.shape[2]} cells"
     )
 
     lim = float(np.percentile(np.abs(frames), LEVEL_PERCENTILE))

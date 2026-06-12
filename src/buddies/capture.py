@@ -11,21 +11,11 @@ class Capture:
     frames: np.ndarray  # (steps, nx, ny) pressure history, Pa
     dt: float  # timestep (s)
     dx: float  # cell size (m)
-    freq: float  # source frequency (Hz)
     c: float  # sound speed (m/s)
-    amplitude: float  # source amplitude (Pa)
 
 
 def save(path, cap):
-    np.savez(
-        path,
-        frames=cap.frames,
-        dt=cap.dt,
-        dx=cap.dx,
-        freq=cap.freq,
-        c=cap.c,
-        amplitude=cap.amplitude,
-    )
+    np.savez(path, frames=cap.frames, dt=cap.dt, dx=cap.dx, c=cap.c)
 
 
 def load(path):
@@ -37,7 +27,5 @@ def load(path):
             frames=data["frames"],
             dt=float(data["dt"]),
             dx=float(data["dx"]),
-            freq=float(data["freq"]),
             c=float(data["c"]),
-            amplitude=float(data["amplitude"]),
         )
