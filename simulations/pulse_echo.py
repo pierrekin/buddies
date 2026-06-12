@@ -1,11 +1,9 @@
 """A single pulse in open water echoing off a rigid slab."""
 
-import math
-
 import numpy as np
 
 from buddies import capture
-from buddies.sim import AcousticFDTD, Source, edge_sponge, to_numpy
+from buddies.sim import AcousticFDTD, Source, edge_sponge, to_numpy, tone
 
 SIZE = 1.0  # m
 DX = 0.01  # m
@@ -13,10 +11,12 @@ FREQ = 15_000.0  # Hz
 STEPS = 1000
 OUT = "captures/pulse_echo.npz"
 
+_tone = tone(FREQ, ramp_periods=1.0)
+
 
 def pulse(t):
-    """One cycle of a FREQ sine, then silence."""
-    return math.sin(2 * math.pi * FREQ * t) if t < 1 / FREQ else 0.0
+    """One cycle of a 1 Pa @ 1 m tone, then silence."""
+    return _tone(t) if t < 1 / FREQ else 0.0
 
 
 n = round(SIZE / DX)

@@ -28,7 +28,9 @@ CFL_SAFETY_FACTOR = 0.2375
 @dataclass(frozen=True)
 class Source:
     pos: tuple[float, float]  # (x, y) in meters
-    waveform: Callable[[float], float]  # t in seconds -> pressure in Pa
+    # t in seconds -> volume injection rate in m^2/s (2D, i.e. volume rate
+    # per meter of line source).
+    waveform: Callable[[float], float]
 
 
 DEFAULT_SPONGE_CELLS = 15
@@ -56,15 +58,61 @@ def edge_sponge(shape, dx, cells=DEFAULT_SPONGE_CELLS, c=SOUND_SPEED_SEAWATER):
     return (peak * depth**2).astype(numpy.float32)
 
 
-def tone(freq, amplitude=1.0, ramp_periods=2.0):
-    """A sine waveform whose amplitude ramps linearly from 0 to ``amplitude``
-    over ``ramp_periods`` periods, limiting the broadband switch-on transient."""
+def tone(
+    freq,
+    amplitude=1.0,
+    at=1.0,
+    delay=0.0,
+    ramp_periods=2.0,
+    c=SOUND_SPEED_SEAWATER,
+    rho=DENSITY_SEAWATER,
+):
+    """A sine waveform calibrated so the far-field pressure amplitude is
+    ``amplitude`` Pa at ``at`` meters from the source, ramping in over
+    ``ramp_periods`` periods to limit the broadband switch-on transient.
+
+    The waveform is silent before ``delay`` seconds.
+
+    Calibration assumes 2D free-field spreading, so it holds in open water;
+    walls and reflectors add their own contributions on top.
+    """
+    omega = 2 * math.pi * freq
+    # 2D Helmholtz Green's function far field for a source of volume-rate
+    # amplitude W: |p(r)| = (rho * omega * W / 4) * sqrt(2 / (pi * k * r)).
+    # Solved for W given |p(at)| = amplitude.
+    w_peak = 4 * amplitude / (rho * omega) * math.sqrt(math.pi * (omega / c) * at / 2)
 
     def waveform(t):
+        t -= delay
+        if t < 0:
+            return 0.0
         ramp = min(1.0, t * freq / ramp_periods)
-        return amplitude * ramp * math.sin(2 * math.pi * freq * t)
+        return w_peak * ramp * math.sin(omega * t)
 
     return waveform
+
+
+def array(start, end, n, focus, waveform, c=SOUND_SPEED_SEAWATER):
+    """``n`` sources evenly spaced on the line from ``start`` to ``end``
+    (meters), with firing delays chosen so every element's wavefront arrives
+    at ``focus`` simultaneously.
+
+    ``waveform`` is called with each element's delay in seconds and must
+    return a Source waveform that is silent before that delay.
+    """
+    positions = [
+        (
+            start[0] + (end[0] - start[0]) * i / (n - 1),
+            start[1] + (end[1] - start[1]) * i / (n - 1),
+        )
+        for i in range(n)
+    ]
+    dists = [math.hypot(px - focus[0], py - focus[1]) for px, py in positions]
+    farthest = max(dists)
+    return [
+        Source(pos=pos, waveform=waveform((farthest - dist) / c))
+        for pos, dist in zip(positions, dists)
+    ]
 
 
 class AcousticFDTD:
@@ -119,6 +167,10 @@ class AcousticFDTD:
 
         self._cv = xp.float32(self.dt / (rho * dx))
         self._cp = xp.float32(rho * c * c * self.dt / dx)
+        # Continuity-equation source term: a volume rate q (m^2/s) injected
+        # into one cell raises p by rho c^2 q dt / dx^2, making the radiated
+        # field independent of dt and dx.
+        self._cq = xp.float32(rho * c * c * self.dt / dx**2)
 
     def step(self):
         """Advance one timestep, injecting each source's waveform at its cell."""
@@ -146,7 +198,7 @@ class AcousticFDTD:
 
         t = self._step_count * self.dt
         for cell, waveform in self._sources:
-            p[cell] += self.xp.float32(waveform(t))
+            p[cell] += self._cq * self.xp.float32(waveform(t))
         self._step_count += 1
 
 
