@@ -111,7 +111,11 @@ class Viewer(QtWidgets.QWidget):
         self.slider.valueChanged.connect(self.set_frame)
         self.slider.sliderPressed.connect(self._scrub_start)
         self.slider.sliderReleased.connect(self._scrub_end)
-        self._slider_style = _JumpSliderStyle(self.slider.style())
+        # QProxyStyle takes ownership of any base style handed to it, so passing
+        # the slider's shared application style would double-free it at teardown
+        # (segfault on quit). The default constructor proxies the app style
+        # without claiming ownership.
+        self._slider_style = _JumpSliderStyle()
         self.slider.setStyle(self._slider_style)
         self._resume_after_scrub = False
         self.time_label = QtWidgets.QLabel()
