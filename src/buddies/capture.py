@@ -21,6 +21,9 @@ class Channel:
     kind: str
     dt: float  # s between samples
     pos: tuple | None = None  # (x, y) in meters
+    # Multiplier from values to meters when drawn in the domain (e.g. 1.0
+    # for a vector already in meters). None = the viewer picks a scale.
+    scale: float | None = None
     values: list = field(default_factory=list)
 
     def append(self, value):
@@ -40,7 +43,9 @@ def save(path, cap):
     arrays = {"frames": cap.frames, "dt": cap.dt, "dx": cap.dx, "c": cap.c}
     meta = []
     for i, ch in enumerate(cap.channels):
-        meta.append({"name": ch.name, "kind": ch.kind, "dt": ch.dt, "pos": ch.pos})
+        meta.append(
+            {"name": ch.name, "kind": ch.kind, "dt": ch.dt, "pos": ch.pos, "scale": ch.scale}
+        )
         arrays[f"channel_{i}"] = np.asarray(ch.values, dtype=np.float32)
     arrays["channels"] = json.dumps(meta)
     np.savez(path, **arrays)
@@ -57,6 +62,7 @@ def load(path):
                 kind=m["kind"],
                 dt=m["dt"],
                 pos=tuple(m["pos"]) if m["pos"] is not None else None,
+                scale=m["scale"],
                 values=data[f"channel_{i}"],
             )
             for i, m in enumerate(json.loads(data["channels"].item()))

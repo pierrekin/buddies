@@ -101,6 +101,8 @@ class Viewer(QtWidgets.QWidget):
         plot.addItem(self.img)
 
     def _label(self, ch):
+        if not ch.name:
+            return
         text = pg.TextItem(ch.name, color=OVERLAY_PEN, anchor=(0, 1))
         text.setPos(*ch.pos)
         self.field_plot.addItem(text)
@@ -130,9 +132,12 @@ class Viewer(QtWidgets.QWidget):
             self._label(ch)
 
     def _add_vector(self, ch):
-        magnitudes = np.hypot(*np.asarray(ch.values).T)
-        ref = float(np.percentile(magnitudes, 95))
-        scale = VECTOR_LENGTH_FRACTION * max(self.domain) / ref if ref > 0 else 0.0
+        if ch.scale is not None:
+            scale = ch.scale
+        else:
+            magnitudes = np.hypot(*np.asarray(ch.values).T)
+            ref = float(np.percentile(magnitudes, 95))
+            scale = VECTOR_LENGTH_FRACTION * max(self.domain) / ref if ref > 0 else 0.0
         shaft = pg.PlotCurveItem(pen=pg.mkPen(OVERLAY_PEN, width=2))
         tip = pg.ScatterPlotItem(size=7, pen=None, brush=OVERLAY_PEN)
         self.field_plot.addItem(shaft)
