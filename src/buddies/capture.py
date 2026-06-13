@@ -24,6 +24,8 @@ class Channel:
     # Multiplier from values to meters when drawn in the domain (e.g. 1.0
     # for a vector already in meters). None = the viewer picks a scale.
     scale: float | None = None
+    # RGBA 0-255 for this channel's overlay graphics. None = viewer default.
+    color: tuple | None = None
     values: list = field(default_factory=list)
 
     def append(self, value):
@@ -54,7 +56,14 @@ def save(path, cap):
     meta = []
     for i, ch in enumerate(cap.channels):
         meta.append(
-            {"name": ch.name, "kind": ch.kind, "dt": ch.dt, "pos": ch.pos, "scale": ch.scale}
+            {
+                "name": ch.name,
+                "kind": ch.kind,
+                "dt": ch.dt,
+                "pos": ch.pos,
+                "scale": ch.scale,
+                "color": ch.color,
+            }
         )
         arrays[f"channel_{i}"] = np.asarray(ch.values, dtype=np.float32)
     arrays["channels"] = json.dumps(meta)
@@ -73,6 +82,7 @@ def load(path):
                 dt=m["dt"],
                 pos=tuple(m["pos"]) if m["pos"] is not None else None,
                 scale=m["scale"],
+                color=tuple(m["color"]) if m["color"] is not None else None,
                 values=data[f"channel_{i}"],
             )
             for i, m in enumerate(json.loads(data["channels"].item()))

@@ -143,8 +143,9 @@ class Viewer(QtWidgets.QWidget):
             magnitudes = np.hypot(*np.asarray(ch.values).T)
             ref = float(np.percentile(magnitudes, 95))
             scale = VECTOR_LENGTH_FRACTION * max(self.domain) / ref if ref > 0 else 0.0
-        shaft = pg.PlotCurveItem(pen=pg.mkPen(OVERLAY_PEN, width=2))
-        tip = pg.ScatterPlotItem(size=7, pen=None, brush=OVERLAY_PEN)
+        color = ch.color if ch.color is not None else OVERLAY_PEN
+        shaft = pg.PlotCurveItem(pen=pg.mkPen(color, width=2))
+        tip = pg.ScatterPlotItem(size=7, pen=None, brush=pg.mkBrush(color))
         self.field_plot.addItem(shaft)
         self.field_plot.addItem(tip)
         self._label(ch)

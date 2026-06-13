@@ -37,9 +37,12 @@ DETECT_THRESHOLD = 0.2  # of a window's transmit peak, for the emit edge
 # An echo is a rise of the smoothed envelope above its running minimum:
 # the transmit reverb only ever decays, so a rise means a reflection.
 RISE_FACTOR = 2.5
-# Pa; sits between real returns (>= ~0.7 beamformed) and the two-way
-# sidelobe clutter from off-beam objects (<= ~0.3).
-MIN_ECHO = 0.5
+MIN_ECHO = 0.05  # Pa, ignore rises in the quiet tail
+# Color scale: loudest return is full hot, returns this many dB below the
+# loudest fade to cold.
+COLOR_SPAN_DB = 30.0
+COLD = np.array((50, 50, 140, 230))  # RGBA
+HOT = np.array((255, 180, 40, 255))
 SMOOTH_STEPS = 30  # trailing-max window, half a pulse, bridges zero crossings
 CAPTURE_EVERY = 4
 OUT = "captures/sonar_sweep.npz"
@@ -99,7 +102,7 @@ for i in range(STEPS):
 # blanking, then range = c * time difference / 2 minus the alignment
 # offset (echoes aligned this way arrive (dmax - FOCUS_RANGE)/c late).
 rx = np.empty(STEPS, dtype=np.float32)
-depth_channels = []
+results = []  # (deg, dist, loudness, ready step)
 for k, deg in enumerate(ANGLES_DEG):
     a = math.radians(deg)
     focus = (CENTER[0] + FOCUS_RANGE * math.cos(a), CENTER[1] + FOCUS_RANGE * math.sin(a))
@@ -122,20 +125,32 @@ for k, deg in enumerate(ANGLES_DEG):
     rises = (listen > RISE_FACTOR * np.minimum.accumulate(listen)) & (listen > MIN_ECHO)
     echo_rel = int(np.argmax(rises)) if rises.any() else None
 
-    a = math.radians(deg)
     if echo_rel is None:
-        dist = None
-        values = [(0.0, 0.0)] * STEPS
+        results.append((deg, None, 0.0, 0))
     else:
         dist = sim.c * (BLANK_STEPS + echo_rel - emit) * sim.dt / 2 - (
             dists.max() - FOCUS_RANGE
         )
-        ready = (k + 1) * PING_STEPS
+        loudness = float(listen[echo_rel : echo_rel + 2 * SMOOTH_STEPS].max())
+        results.append((deg, dist, loudness, (k + 1) * PING_STEPS))
+
+loudest = max(loudness for _, dist, loudness, _ in results if dist is not None)
+depth_channels = []
+for deg, dist, loudness, ready in results:
+    if dist is None:
+        values = [(0.0, 0.0)] * STEPS
+        color = None
+        print(f"{deg:+3d} deg: no echo")
+    else:
+        a = math.radians(deg)
         vec = (dist * math.cos(a), dist * math.sin(a))
         values = [(0.0, 0.0)] * ready + [vec] * (STEPS - ready)
-    print(f"{deg:+3d} deg: " + (f"range {dist:.3f} m" if dist else "no echo"))
+        db = 20 * math.log10(loudness / loudest)
+        q = max(0.0, 1 + db / COLOR_SPAN_DB)
+        color = tuple(int(v) for v in np.rint(COLD + (HOT - COLD) * q))
+        print(f"{deg:+3d} deg: range {dist:.3f} m  {db:+6.1f} dB")
 
-    ch = Channel("", kind="vector", dt=sim.dt, pos=CENTER, scale=1.0)
+    ch = Channel("", kind="vector", dt=sim.dt, pos=CENTER, scale=1.0, color=color)
     ch.values = values
     depth_channels.append(ch)
 
