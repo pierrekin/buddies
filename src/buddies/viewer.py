@@ -4,14 +4,11 @@ overlays (vector arrows, color markers) and synced scalar plots.
 Frames are uint8 normalized to the level baked in at process time, so the
 field maps straight through the colormap with no per-open level scan."""
 
-import argparse
 import signal
 
 import numpy as np
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
-
-from buddies import store
 
 DEFAULT_FPS = 60.0
 DEFAULT_COLORMAP = "CET-D1A"  # diverging blue-white-red, if meta lacks one
@@ -274,15 +271,3 @@ def launch(st, title="capture", fps=DEFAULT_FPS):
     sigint_timer.start(100)
 
     app.exec()
-
-
-def main():
-    ap = argparse.ArgumentParser(description="View a processed artifact directory")
-    ap.add_argument("path", help="processed artifact directory")
-    ap.add_argument("--fps", type=float, default=DEFAULT_FPS, help="playback rate (frames/s)")
-    args = ap.parse_args()
-    launch(store.open_store(args.path), title=args.path, fps=args.fps)
-
-
-if __name__ == "__main__":
-    main()
