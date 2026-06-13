@@ -26,6 +26,9 @@ FIELD_ROW_STRETCH = 4  # field view height relative to each scalar plot row
 # A vector channel's 95th-percentile magnitude is drawn at this fraction of
 # the domain size.
 VECTOR_LENGTH_FRACTION = 0.1
+# Vertical distance (px) from the slider at which fine-scrub sensitivity is
+# halved; sensitivity falls off as FALLOFF / (FALLOFF + distance).
+FINE_SCRUB_FALLOFF = 80.0
 
 
 class _JumpSliderStyle(QtWidgets.QProxyStyle):
@@ -36,6 +39,42 @@ class _JumpSliderStyle(QtWidgets.QProxyStyle):
         if hint == QtWidgets.QStyle.StyleHint.SH_Slider_AbsoluteSetButtons:
             return int(QtCore.Qt.MouseButton.LeftButton.value)
         return super().styleHint(hint, option, widget, returnData)
+
+
+class FineSlider(QtWidgets.QSlider):
+    """A slider whose drag sensitivity drops as the cursor moves vertically
+    away from the groove, allowing frame-accurate scrubbing. A click still
+    snaps to the cursor (via the proxy style); from there the drag is relative,
+    so moving the mouse up or down before dragging trades speed for precision."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._float_val = 0.0
+        self._last_x = 0.0
+
+    def mousePressEvent(self, ev):
+        # Let the base class snap to the click and emit sliderPressed, then
+        # anchor the relative accumulator at that position.
+        super().mousePressEvent(ev)
+        if ev.button() == QtCore.Qt.MouseButton.LeftButton:
+            self._float_val = float(self.value())
+            self._last_x = ev.position().x()
+
+    def mouseMoveEvent(self, ev):
+        if not self.isSliderDown():
+            super().mouseMoveEvent(ev)
+            return
+        pos = ev.position()
+        dx = pos.x() - self._last_x
+        self._last_x = pos.x()
+        # Distance of the cursor above or below the slider's own height.
+        dy = max(0.0, -pos.y(), pos.y() - self.height())
+        factor = FINE_SCRUB_FALLOFF / (FINE_SCRUB_FALLOFF + dy)
+        span = self.maximum() - self.minimum()
+        self._float_val += dx * (span / max(1, self.width())) * factor
+        self._float_val = min(self.maximum(), max(self.minimum(), self._float_val))
+        self.setValue(round(self._float_val))
+        ev.accept()
 
 
 class Viewer(QtWidgets.QWidget):
@@ -74,7 +113,7 @@ class Viewer(QtWidgets.QWidget):
         self.play_button = QtWidgets.QPushButton("Pause")
         self.play_button.clicked.connect(self.toggle)
         QtGui.QShortcut(QtGui.QKeySequence(QtCore.Qt.Key.Key_Space), self, self.toggle)
-        self.slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.slider = FineSlider(QtCore.Qt.Orientation.Horizontal)
         self.slider.setRange(0, self.nframes - 1)
         self.slider.valueChanged.connect(self.set_frame)
         self.slider.sliderPressed.connect(self._scrub_start)
