@@ -43,6 +43,23 @@ def proc_path(sim, out):
     return os.path.join(ROOT, sim, "processed", out)
 
 
+def _dirs(path):
+    if not os.path.isdir(path):
+        return []
+    return sorted(d for d in os.listdir(path) if os.path.isdir(os.path.join(path, d)))
+
+
+def available_sims():
+    return [s for s in _dirs(SIMS_DIR) if os.path.exists(os.path.join(SIMS_DIR, s, "simulate.py"))]
+
+
+def _die_listing(what, items, prefix=None):
+    lines = [prefix] if prefix else []
+    lines.append(f"available {what}:" if items else f"no {what} yet")
+    lines += [f"  {i}" for i in items]
+    sys.exit("\n".join(lines))
+
+
 def _load_stage(sim, stage):
     """Import ``simulations/<sim>/<stage>.py`` by path, or None if absent."""
     path = os.path.join(SIMS_DIR, sim, f"{stage}.py")
@@ -146,6 +163,8 @@ def cmd_process(a):
 
     pargs = simargs.process_args(ns)
     out = ns.out or ns.run
+    if not os.path.isdir(sim_path(a.sim, ns.run)):
+        _die_listing(f"runs for {a.sim}", _dirs(os.path.join(ROOT, a.sim, "sim")), prefix=f"no run {ns.run!r}")
     master = store.open_store(sim_path(a.sim, ns.run))
     source_sig = {k: master.meta.get(k) for k in SIM_SIG_KEYS}
     print(f"wrote {_write_processed(proc, a.sim, ns.run, out, pargs, source_sig)}")
@@ -159,6 +178,8 @@ def cmd_view(a):
     ap.add_argument("--fps", type=float, default=60.0, help="playback rate")
     ns = ap.parse_args(a.rest)
 
+    if not os.path.isdir(proc_path(a.sim, ns.out)):
+        _die_listing(f"outputs for {a.sim}", _dirs(os.path.join(ROOT, a.sim, "processed")), prefix=f"no output {ns.out!r}")
     st = store.open_store(proc_path(a.sim, ns.out))
     viewer.launch(st, title=f"{a.sim}/{ns.out}", fps=ns.fps)
 
@@ -212,10 +233,14 @@ def main():
         ("show", cmd_show, "run whatever is missing, then view"),
     ):
         sp = sub.add_parser(name, help=help_text)
-        sp.add_argument("sim")
+        sp.add_argument("sim", nargs="?")
         sp.set_defaults(func=func)
 
     a, rest = ap.parse_known_args()
+    if a.sim is None:
+        _die_listing("simulations", available_sims())
+    if a.sim not in available_sims():
+        _die_listing("simulations", available_sims(), prefix=f"unknown simulation {a.sim!r}")
     a.rest = rest
     a.func(a)
 
