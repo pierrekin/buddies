@@ -1,0 +1,175 @@
+"""Sonar v2: a rigid backstop wall behind the block, and ranging on the LOUDEST
+return per angle instead of the first. The array fires one beamformed ping per
+angle, beamforms the same angle on receive, and the strongest arrival in each
+listen window sets that angle's range. Arrows are colored by loudness."""
+
+import math
+
+import numpy as np
+
+from buddies import simargs
+from buddies.sim import AcousticFDTD, array, edge_sponge, receiver_array, timestep, to_numpy, tone
+from buddies.store import Channel
+
+SIZE_X = 2.0  # m
+SIZE_Y = 1.0  # m
+FREQ = 15_000.0  # Hz
+DEFAULTS = {"capture_every": 8}
+ELEMENTS = 16
+ARRAY_X = 0.15  # m
+APERTURE = 0.3  # m
+ANGLES_DEG = range(-30, 31, 2)
+FOCUS_RANGE = 1.05  # m, sharpens the beam around the block's range
+DETECT_THRESHOLD = 0.2  # of a window's transmit peak, for the emit edge
+MIN_ECHO = 0.05  # Pa, below this a window counts as no echo
+# The smoothed envelope peaks ~3/4 of a cycle behind the arrival's leading edge
+# (one-cycle ramped pulse); subtracted from the time of flight.
+PEAK_OFFSET_S = 0.75 / FREQ
+# Color scale: loudest return is full hot, returns this many dB below the
+# loudest fade to cold.
+COLOR_SPAN_DB = 30.0
+COLD = np.array((50, 50, 140, 230))  # RGBA
+HOT = np.array((255, 180, 40, 255))
+CENTER = (ARRAY_X, SIZE_Y / 2)
+
+
+def ping_waveform(ping_start):
+    """A waveform factory for ``array``: one tone cycle fired at the element's
+    beamforming delay, offset by this ping's start time."""
+
+    def factory(d):
+        w = tone(FREQ, delay=ping_start + d, ramp_periods=1.0)
+        end = ping_start + d + 1 / FREQ
+        return lambda t: w(t) if t < end else 0.0
+
+    return factory
+
+
+def run(args, out):
+    DX = args.dx
+    ping_steps = args.steps(2400)  # round trip to the backstop at +-40 deg
+    # Ignore the mic until the transmit has fully passed. Loudest-return ranging
+    # has no reverb rejection, so this must outlast the entire transmit tail
+    # even at +-40 deg steering (delay spread ~170 steps + ring).
+    blank_steps = args.steps(600)
+    # Trailing-max window, half a pulse, bridges zero crossings.
+    smooth_steps = args.steps(30)
+
+    steps = ping_steps * len(ANGLES_DEG)
+    dt = timestep(DX, cfl=args.cfl)
+
+    nx, ny = round(SIZE_X / DX), round(SIZE_Y / DX)
+    sources = []
+    for k, deg in enumerate(ANGLES_DEG):
+        a = math.radians(deg)
+        sources += array(
+            start=(ARRAY_X, CENTER[1] - APERTURE / 2),
+            end=(ARRAY_X, CENTER[1] + APERTURE / 2),
+            n=ELEMENTS,
+            focus=(CENTER[0] + FOCUS_RANGE * math.cos(a), CENTER[1] + FOCUS_RANGE * math.sin(a)),
+            waveform=ping_waveform(k * ping_steps * dt),
+        )
+
+    rigid = np.zeros((nx, ny), dtype=bool)
+    overlay = np.zeros((nx, ny, 4), dtype=np.uint8)
+
+    def cells(lo, hi):
+        return slice(round(lo / DX), round(hi / DX))
+
+    # 8x8 cm block in the bottom half, ~1.08 m from the array at ~-12 deg.
+    block = (cells(1.21, 1.29), cells(0.23, 0.31))
+    rigid[block] = True
+    overlay[block] = (140, 110, 70, 220)  # RGBA
+    # 8x8 cm block in the upper half, ~0.78 m from the array at ~+11 deg.
+    block2 = (cells(0.91, 0.99), cells(0.61, 0.69))
+    rigid[block2] = True
+    overlay[block2] = (110, 140, 70, 220)
+    # Full-height backstop wall, face at x = 1.55.
+    backstop = (cells(1.55, 1.60), slice(0, ny))
+    rigid[backstop] = True
+    overlay[backstop] = (80, 80, 90, 220)
+
+    mics = receiver_array(
+        (ARRAY_X, CENTER[1] - APERTURE / 2), (ARRAY_X, CENTER[1] + APERTURE / 2), ELEMENTS
+    )
+    element_y = np.array([m.pos[1] for m in mics])
+    for mx, my in (m.pos for m in mics):
+        overlay[round(mx / DX), round(my / DX)] = (40, 200, 255, 255)
+
+    sim = AcousticFDTD(
+        nx, ny, DX, cfl=args.cfl, xp=args.xp, sources=sources, receivers=mics, rigid=rigid,
+        damping=edge_sponge((nx, ny), DX),
+    )
+
+    recordings_dev = args.xp.empty((steps, ELEMENTS), dtype=np.float32)
+    frames = out.open((args.nframes(steps), nx, ny))
+    for i in simargs.progress(steps):
+        sim.step()
+        if i % args.capture_every == 0:
+            frames[i // args.capture_every] = to_numpy(sim.p)
+        recordings_dev[i] = sim.record()
+    recordings = to_numpy(recordings_dev)
+
+    # Per ping: delay-and-sum the element recordings with the ping's own delays,
+    # find the transmit's leading edge, then take the LOUDEST arrival after
+    # blanking. Range = c * time difference / 2 minus the alignment offset
+    # (echoes aligned this way arrive (dmax - FOCUS_RANGE)/c late).
+    rx = np.empty(steps, dtype=np.float32)
+    results = []  # (deg, dist, loudness, ready step)
+    for k, deg in enumerate(ANGLES_DEG):
+        a = math.radians(deg)
+        focus = (CENTER[0] + FOCUS_RANGE * math.cos(a), CENTER[1] + FOCUS_RANGE * math.sin(a))
+        dists = np.hypot(ARRAY_X - focus[0], element_y - focus[1])
+        shifts = np.round((dists.max() - dists) / sim.c / sim.dt).astype(int)
+
+        win = recordings[k * ping_steps : (k + 1) * ping_steps]
+        beamformed = np.zeros(ping_steps, dtype=np.float32)
+        for j, s in enumerate(shifts):
+            beamformed[s:] += win[: ping_steps - s, j]
+        beamformed /= ELEMENTS
+        rx[k * ping_steps : (k + 1) * ping_steps] = beamformed
+
+        window = np.abs(beamformed)
+        emit = int(np.argmax(window > DETECT_THRESHOLD * window[:blank_steps].max()))
+        env = np.array(
+            [window[max(0, i - smooth_steps) : i + 1].max() for i in range(len(window))]
+        )
+        listen = env[blank_steps:]
+        loudness = float(listen.max())
+        if loudness < MIN_ECHO:
+            results.append((deg, None, 0.0, 0))
+        else:
+            echo_rel = int(listen.argmax())
+            dist = (
+                sim.c * ((blank_steps + echo_rel - emit) * sim.dt - PEAK_OFFSET_S) / 2
+                - (dists.max() - FOCUS_RANGE)
+            )
+            results.append((deg, dist, loudness, (k + 1) * ping_steps))
+
+    loudest = max((loudness for _, dist, loudness, _ in results if dist is not None), default=None)
+    depth_channels = []
+    for deg, dist, loudness, ready in results:
+        if dist is None:
+            values = [(0.0, 0.0)] * steps
+            color = None
+            print(f"{deg:+3d} deg: no echo")
+        else:
+            a = math.radians(deg)
+            vec = (dist * math.cos(a), dist * math.sin(a))
+            values = [(0.0, 0.0)] * ready + [vec] * (steps - ready)
+            db = 20 * math.log10(loudness / loudest)
+            q = max(0.0, 1 + db / COLOR_SPAN_DB)
+            color = tuple(int(v) for v in np.rint(COLD + (HOT - COLD) * q))
+            print(f"{deg:+3d} deg: range {dist:.3f} m  {db:+6.1f} dB")
+
+        ch = Channel("", kind="vector", dt=sim.dt, pos=CENTER, scale=1.0, color=color)
+        ch.values = values
+        depth_channels.append(ch)
+
+    mic = Channel("rx beam (Pa)", kind="scalar", dt=sim.dt, pos=CENTER)
+    mic.values = list(rx)
+
+    out.finish(
+        dt=sim.dt * args.capture_every, dx=DX, c=sim.c,
+        channels=(mic, *depth_channels), overlay=overlay,
+    )

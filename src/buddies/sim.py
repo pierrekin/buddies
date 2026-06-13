@@ -38,6 +38,16 @@ class Source:
     waveform: Callable[[float], float]
 
 
+@dataclass(frozen=True)
+class Receiver:
+    """A point pressure sampler -- the receive-side counterpart to ``Source``.
+
+    A receiver is just p(t) read at a position (in meters). It is an ideal
+    sampler: no frequency response, directivity, or self-noise."""
+
+    pos: tuple[float, float]  # (x, y) in meters
+
+
 DEFAULT_SPONGE_CELLS = 15
 # One-way amplitude attenuation through the sponge, in nepers.
 # 7 nepers = exp(-7) ~ 1e-3 ~ -60 dB.
@@ -97,6 +107,17 @@ def tone(
     return waveform
 
 
+def line(start, end, n):
+    """``n`` points evenly spaced from ``start`` to ``end`` (meters)."""
+    return [
+        (
+            start[0] + (end[0] - start[0]) * i / (n - 1),
+            start[1] + (end[1] - start[1]) * i / (n - 1),
+        )
+        for i in range(n)
+    ]
+
+
 def array(start, end, n, focus, waveform, c=SOUND_SPEED_SEAWATER):
     """``n`` sources evenly spaced on the line from ``start`` to ``end``
     (meters), with firing delays chosen so every element's wavefront arrives
@@ -105,19 +126,19 @@ def array(start, end, n, focus, waveform, c=SOUND_SPEED_SEAWATER):
     ``waveform`` is called with each element's delay in seconds and must
     return a Source waveform that is silent before that delay.
     """
-    positions = [
-        (
-            start[0] + (end[0] - start[0]) * i / (n - 1),
-            start[1] + (end[1] - start[1]) * i / (n - 1),
-        )
-        for i in range(n)
-    ]
+    positions = line(start, end, n)
     dists = [math.hypot(px - focus[0], py - focus[1]) for px, py in positions]
     farthest = max(dists)
     return [
         Source(pos=pos, waveform=waveform((farthest - dist) / c))
         for pos, dist in zip(positions, dists)
     ]
+
+
+def receiver_array(start, end, n):
+    """``n`` receivers evenly spaced on the line from ``start`` to ``end``
+    (meters) -- the receive-side counterpart to ``array``."""
+    return [Receiver(pos=pos) for pos in line(start, end, n)]
 
 
 class AcousticFDTD:
@@ -130,6 +151,7 @@ class AcousticFDTD:
         rho=DENSITY_SEAWATER,
         cfl=CFL_SAFETY_FACTOR,
         sources=(),
+        receivers=(),
         rigid=None,
         damping=None,
         xp=numpy,
@@ -169,6 +191,17 @@ class AcousticFDTD:
         self._waveforms = [waveform for _, waveform in self._sources]
         self._src_ix = xp.asarray([cell[0] for cell, _ in self._sources], dtype=int)
         self._src_iy = xp.asarray([cell[1] for cell, _ in self._sources], dtype=int)
+
+        self.receivers = tuple(receivers)
+        rx_cells = []
+        for rx in self.receivers:
+            ix, iy = round(rx.pos[0] / dx), round(rx.pos[1] / dx)
+            if not (0 <= ix < nx and 0 <= iy < ny):
+                raise ValueError(f"receiver at {rx.pos} m is outside the {nx}x{ny} grid")
+            rx_cells.append((ix, iy))
+        # Receiver cells as device index arrays, for one gather per step.
+        self._rx_ix = xp.asarray([ix for ix, _ in rx_cells], dtype=int)
+        self._rx_iy = xp.asarray([iy for _, iy in rx_cells], dtype=int)
 
         self._step_count = 0
         self.p = xp.zeros((nx, ny), dtype=xp.float32)
@@ -214,6 +247,11 @@ class AcousticFDTD:
             vals *= self._cq
             self._scatter_add(p, self._src_ix, self._src_iy, vals)
         self._step_count += 1
+
+    def record(self):
+        """Pressure (Pa) at every registered receiver, as an ``xp`` array of
+        shape ``(len(receivers),)`` in registration order."""
+        return self.p[self._rx_ix, self._rx_iy]
 
     def _scatter_add(self, p, ix, iy, vals):
         """Accumulate ``vals`` into ``p[ix, iy]``, summing any duplicate cells.

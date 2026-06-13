@@ -12,6 +12,7 @@ dependencies = [
 ]
 
 [project.scripts]
+buddies = "buddies.cli:main"
 viewer = "buddies.viewer:main"
 
 [project.optional-dependencies]

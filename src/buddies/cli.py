@@ -1,0 +1,224 @@
+"""buddies: simulate -> process -> view.
+
+    buddies simulate <sim> [run]            run the simulation
+    buddies process  <sim> [run] [out]      prepare a run for viewing
+    buddies view     <sim> [out]            open the viewer
+    buddies show     <sim> [run] [out]      run whatever is missing, then view
+
+Outputs live under output/<sim>/. A run name and an output name both default to
+"default"; process's output name defaults to its source run, so one name can
+carry through:
+
+    buddies simulate mysim big --resolution 20
+    buddies process  mysim big
+    buddies view     mysim big
+
+``show`` collapses that to one call, taking both stages' options and rerunning
+only the stages whose options changed:
+
+    buddies show mysim big --resolution 20 --decimate 2
+
+Options (--resolution, --decimate, ...) follow the positionals.
+"""
+
+import argparse
+import importlib.util
+import json
+import os
+import sys
+
+from buddies import simargs, store
+
+ROOT = "output"
+SIMS_DIR = "simulations"
+DEFAULT_NAME = "default"
+SIM_SIG_KEYS = ("resolution", "cfl", "capture_every")
+
+
+def sim_path(sim, run):
+    return os.path.join(ROOT, sim, "sim", run)
+
+
+def proc_path(sim, out):
+    return os.path.join(ROOT, sim, "processed", out)
+
+
+def _load_stage(sim, stage):
+    """Import ``simulations/<sim>/<stage>.py`` by path, or None if absent."""
+    path = os.path.join(SIMS_DIR, sim, f"{stage}.py")
+    if not os.path.exists(path):
+        return None
+    spec = importlib.util.spec_from_file_location(f"buddies_{sim}_{stage}", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _require_simulate(sim):
+    mod = _load_stage(sim, "simulate")
+    if mod is None:
+        sys.exit(f"no simulate.py for {sim!r} (looked in {SIMS_DIR}/{sim}/)")
+    return mod
+
+
+def _processor(sim):
+    """The sim's own ``process`` if it ships one, else the default processor."""
+    mod = _load_stage(sim, "process")
+    if mod is not None and hasattr(mod, "process"):
+        return mod, mod.process
+    from buddies import process as default_process
+
+    return mod, default_process.process
+
+
+def _sim_sig(args):
+    """The signature recorded for a master built with these args."""
+    return {k: getattr(args, k) for k in SIM_SIG_KEYS}
+
+
+def _read_meta(path):
+    metafile = os.path.join(path, store.META)
+    if not os.path.exists(metafile):
+        return None
+    with open(metafile) as f:
+        return json.load(f)
+
+
+def _stale(path, expected):
+    """True if ``path`` has no meta or any ``expected`` key differs from it."""
+    meta = _read_meta(path)
+    if meta is None:
+        return True
+    return any(meta.get(k) != v for k, v in expected.items())
+
+
+def _write_master(mod, sim, run, args):
+    path = sim_path(sim, run)
+    writer = store.Writer(path, {"kind": "master", "sim": sim, "run": run, **_sim_sig(args)})
+    mod.run(args, writer)
+    return path
+
+
+def _write_processed(proc, sim, run, out, pargs, source_sig):
+    path = proc_path(sim, out)
+    writer = store.Writer(
+        path,
+        {
+            "kind": "processed",
+            "sim": sim,
+            "source_run": run,
+            "out": out,
+            "decimate": pargs.decimate,
+            "percentile": pargs.percentile,
+            "source": source_sig,
+        },
+    )
+    proc(store.open_store(sim_path(sim, run)), pargs, writer)
+    return path
+
+
+def _proc_sig(pargs, run, source_sig):
+    return {
+        "decimate": pargs.decimate,
+        "percentile": pargs.percentile,
+        "source_run": run,
+        "source": source_sig,
+    }
+
+
+def cmd_simulate(a):
+    mod = _require_simulate(a.sim)
+    ap = argparse.ArgumentParser(prog=f"buddies simulate {a.sim}", description=mod.__doc__)
+    ap.add_argument("run", nargs="?", default=DEFAULT_NAME)
+    simargs.add_sim_args(ap, **getattr(mod, "DEFAULTS", {}))
+    ns = ap.parse_args(a.rest)
+    args = simargs.sim_args(ns, mod.FREQ)
+    print(f"wrote {_write_master(mod, a.sim, ns.run, args)}")
+
+
+def cmd_process(a):
+    proc_mod, proc = _processor(a.sim)
+    ap = argparse.ArgumentParser(prog=f"buddies process {a.sim}")
+    ap.add_argument("run", nargs="?", default=DEFAULT_NAME, help="source run")
+    ap.add_argument("out", nargs="?", default=None, help="output name (default: the run name)")
+    simargs.add_process_args(ap, **(getattr(proc_mod, "DEFAULTS", {}) if proc_mod else {}))
+    ns = ap.parse_args(a.rest)
+
+    pargs = simargs.process_args(ns)
+    out = ns.out or ns.run
+    master = store.open_store(sim_path(a.sim, ns.run))
+    source_sig = {k: master.meta.get(k) for k in SIM_SIG_KEYS}
+    print(f"wrote {_write_processed(proc, a.sim, ns.run, out, pargs, source_sig)}")
+
+
+def cmd_view(a):
+    from buddies import viewer
+
+    ap = argparse.ArgumentParser(prog=f"buddies view {a.sim}")
+    ap.add_argument("out", nargs="?", default=DEFAULT_NAME)
+    ap.add_argument("--fps", type=float, default=60.0, help="playback rate")
+    ns = ap.parse_args(a.rest)
+
+    st = store.open_store(proc_path(a.sim, ns.out))
+    viewer.launch(st, title=f"{a.sim}/{ns.out}", fps=ns.fps)
+
+
+def cmd_show(a):
+    from buddies import viewer
+
+    sim_mod = _require_simulate(a.sim)
+    proc_mod, proc = _processor(a.sim)
+
+    ap = argparse.ArgumentParser(prog=f"buddies show {a.sim}")
+    ap.add_argument("run", nargs="?", default=DEFAULT_NAME)
+    ap.add_argument("out", nargs="?", default=None, help="output name (default: the run name)")
+    simargs.add_sim_args(ap, **getattr(sim_mod, "DEFAULTS", {}))
+    simargs.add_process_args(ap, **(getattr(proc_mod, "DEFAULTS", {}) if proc_mod else {}))
+    ap.add_argument("--fps", type=float, default=60.0, help="playback rate")
+    ns = ap.parse_args(a.rest)
+
+    args = simargs.sim_args(ns, sim_mod.FREQ)
+    pargs = simargs.process_args(ns)
+    run = ns.run
+    out = ns.out or ns.run
+    sig = _sim_sig(args)
+
+    mpath = sim_path(a.sim, run)
+    if _stale(mpath, sig):
+        print(f"simulating {a.sim}/{run} ...")
+        _write_master(sim_mod, a.sim, run, args)
+    else:
+        print(f"master {a.sim}/{run} up to date")
+
+    ppath = proc_path(a.sim, out)
+    if _stale(ppath, _proc_sig(pargs, run, sig)):
+        print(f"processing {a.sim}/{out} ...")
+        _write_processed(proc, a.sim, run, out, pargs, sig)
+    else:
+        print(f"processed {a.sim}/{out} up to date")
+
+    viewer.launch(store.open_store(ppath), title=f"{a.sim}/{out}", fps=ns.fps)
+
+
+def main():
+    ap = argparse.ArgumentParser(
+        prog="buddies", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    for name, func, help_text in (
+        ("simulate", cmd_simulate, "run the simulation"),
+        ("process", cmd_process, "prepare a run for viewing"),
+        ("view", cmd_view, "open the viewer"),
+        ("show", cmd_show, "run whatever is missing, then view"),
+    ):
+        sp = sub.add_parser(name, help=help_text)
+        sp.add_argument("sim")
+        sp.set_defaults(func=func)
+
+    a, rest = ap.parse_known_args()
+    a.rest = rest
+    a.func(a)
+
+
+if __name__ == "__main__":
+    main()

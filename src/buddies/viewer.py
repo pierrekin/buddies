@@ -1,25 +1,20 @@
-"""Viewer for capture files: animated pressure field with channel overlays
-(vector arrows, color markers) and synced scalar plots."""
+"""Viewer for processed artifacts: animated pressure field with channel
+overlays (vector arrows, color markers) and synced scalar plots.
+
+Frames are uint8 normalized to the level baked in at process time, so the
+field maps straight through the colormap with no per-open level scan."""
 
 import argparse
 import signal
-import sys
 
 import numpy as np
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
-from buddies import capture
+from buddies import store
 
 DEFAULT_FPS = 60.0
-# Display levels are set to this percentile of |p|. Scaling to the global
-# maximum (the source peak) would render the decaying wavefront nearly
-# invisible.
-LEVEL_PERCENTILE = 99.5
-# Computing the percentile over every frame of a multi-GB capture is slow;
-# this many frames, evenly spaced, estimate it.
-LEVEL_SAMPLE_FRAMES = 32
-COLORMAP = "CET-D1A"  # diverging blue-white-red
+DEFAULT_COLORMAP = "CET-D1A"  # diverging blue-white-red, if meta lacks one
 OVERLAY_PEN = "g"
 WINDOW_SIZE = (900, 950)
 FIELD_ROW_STRETCH = 4  # field view height relative to each scalar plot row
@@ -78,26 +73,27 @@ class FineSlider(QtWidgets.QSlider):
 
 
 class Viewer(QtWidgets.QWidget):
-    def __init__(self, title, cap, fps):
+    def __init__(self, title, st, fps):
         super().__init__()
-        self.cap = cap
-        self.frames = cap.frames
-        self.nframes = len(cap.frames)
+        self.st = st
+        self.frames = st.frames
+        self.nframes = len(st.frames)
+        self.dt = st.dt
         self._frame_hooks = []  # called with the current time on frame change
 
         self.setWindowTitle(
             f"{title} | {self.nframes} frames | "
-            f"{cap.frames.shape[1]}x{cap.frames.shape[2]} cells | "
-            f"{len(cap.channels)} channels"
+            f"{st.frames.shape[1]}x{st.frames.shape[2]} cells | "
+            f"{len(st.channels)} channels"
         )
         self.resize(*WINDOW_SIZE)
 
         glw = pg.GraphicsLayoutWidget()
         self._build_field_view(glw)
         plot_row = 1
-        for ch in cap.channels:
+        for ch in st.channels:
             if len(ch.values) == 0:
-                print(f"warning: channel {ch.name!r} is empty, skipping", file=sys.stderr)
+                print(f"warning: channel {ch.name!r} is empty, skipping")
                 continue
             if ch.kind == "scalar":
                 self._add_scalar(glw, plot_row, ch)
@@ -139,24 +135,23 @@ class Viewer(QtWidgets.QWidget):
 
     def _build_field_view(self, glw):
         _, nx, ny = self.frames.shape
-        self.domain = (nx * self.cap.dx, ny * self.cap.dx)
+        self.domain = (nx * self.st.dx, ny * self.st.dx)
         plot = glw.addPlot(row=0, col=0)
         plot.setAspectLocked(True)
         plot.setLabel("bottom", "x", units="m")
         plot.setLabel("left", "y", units="m")
         self.field_plot = plot
 
-        sample = self.frames[:: max(1, self.nframes // LEVEL_SAMPLE_FRAMES)]
-        lim = float(np.percentile(np.abs(sample), LEVEL_PERCENTILE))
-        self.cmap = pg.colormap.get(COLORMAP)
+        self.cmap = pg.colormap.get(self.st.meta.get("colormap", DEFAULT_COLORMAP))
         self.img = pg.ImageItem(self.frames[0])
         self.img.setLookupTable(self.cmap.getLookupTable(nPts=256))
-        self.img.setLevels((-lim, lim))
+        # uint8 0..255 already spans the baked level; 128 = zero pressure.
+        self.img.setLevels((0, 255))
         self.img.setRect(QtCore.QRectF(0, 0, *self.domain))
         plot.addItem(self.img)
 
-        if self.cap.overlay is not None:
-            overlay = pg.ImageItem(self.cap.overlay)
+        if self.st.overlay is not None:
+            overlay = pg.ImageItem(self.st.overlay)
             overlay.setRect(QtCore.QRectF(0, 0, *self.domain))
             plot.addItem(overlay)
 
@@ -233,7 +228,7 @@ class Viewer(QtWidgets.QWidget):
     def set_frame(self, i):
         self._frame = i
         self.img.setImage(self.frames[i], autoLevels=False)
-        t = i * self.cap.dt
+        t = i * self.dt
         for hook in self._frame_hooks:
             hook(t)
         self.slider.blockSignals(True)
@@ -264,14 +259,9 @@ class Viewer(QtWidgets.QWidget):
             self.play_button.setText("Pause")
 
 
-def main():
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("run", help="capture file to view")
-    ap.add_argument("--fps", type=float, default=DEFAULT_FPS, help="playback rate (frames/s)")
-    args = ap.parse_args()
-
+def launch(st, title="capture", fps=DEFAULT_FPS):
     app = pg.mkQApp("FDTD viewer")
-    viewer = Viewer(args.run, capture.load(args.run), args.fps)
+    viewer = Viewer(title, st, fps)
     viewer.show()
 
     # Qt's event loop runs in C++ and won't deliver SIGINT to Python until the
@@ -284,6 +274,14 @@ def main():
     sigint_timer.start(100)
 
     app.exec()
+
+
+def main():
+    ap = argparse.ArgumentParser(description="View a processed artifact directory")
+    ap.add_argument("path", help="processed artifact directory")
+    ap.add_argument("--fps", type=float, default=DEFAULT_FPS, help="playback rate (frames/s)")
+    args = ap.parse_args()
+    launch(store.open_store(args.path), title=args.path, fps=args.fps)
 
 
 if __name__ == "__main__":
