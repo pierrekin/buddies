@@ -102,17 +102,20 @@ def run(args, out):
         rigid[mask] = True
         overlay[mask] = color
 
-    # Diffuse sea wall: a wavelength-scale bumpy height field standing in range,
-    # filling from its rough near face out to the far domain edge.
+    # Diffuse sea wall: a wavelength-scale bumpy height field standing in range.
+    # Inset by the boundary width on the top, bottom, and far edges so no rigid
+    # cell lands in the absorbing layer -- a reflector inside a PML is unstable,
+    # and the inset keeps the sponge and PML scenes identical for comparison.
+    margin = args.sponge_cells
     kernel_cells = max(1, round(BUMP_WIDTH / DX))
     noise = np.random.default_rng(7).random(ny + kernel_cells)
     profile = np.convolve(noise, np.ones(kernel_cells) / kernel_cells, mode="valid")[:ny]
     profile = (profile - profile.min()) / (profile.max() - profile.min())
     bump_cells = np.rint(profile * BUMP_HEIGHT / DX).astype(int)
     wall_cell = round(WALL_X / DX)
-    for iy in range(ny):
-        rigid[wall_cell - bump_cells[iy] : nx, iy] = True
-        overlay[wall_cell - bump_cells[iy] : nx, iy] = (90, 80, 70, 220)
+    for iy in range(margin, ny - margin):
+        rigid[wall_cell - bump_cells[iy] : nx - margin, iy] = True
+        overlay[wall_cell - bump_cells[iy] : nx - margin, iy] = (90, 80, 70, 220)
 
     mics = receiver_array(
         (ARRAY_X, CENTER[1] - APERTURE / 2), (ARRAY_X, CENTER[1] + APERTURE / 2), ELEMENTS
@@ -123,7 +126,7 @@ def run(args, out):
 
     sim = AcousticFDTD(
         nx, ny, DX, cfl=args.cfl, xp=args.xp, sources=sources, receivers=mics, rigid=rigid,
-        **boundaries.make(args, (nx, ny), DX),
+        **boundaries.make(args, (nx, ny), DX, FREQ),
     )
 
     # Step counts from physical path lengths: cover the two-way trip across the

@@ -82,7 +82,7 @@ def run(args, out):
 
     sim = AcousticFDTD(
         nx, ny, DX, cfl=args.cfl, xp=args.xp, sources=sources, receivers=mics, rigid=rigid,
-        **boundaries.make(args, (nx, ny), DX),
+        **boundaries.make(args, (nx, ny), DX, FREQ),
     )
 
     recordings_dev = args.xp.empty((steps, ELEMENTS), dtype=np.float32)

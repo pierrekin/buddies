@@ -213,12 +213,17 @@ class AcousticFDTD:
         receivers=(),
         rigid=None,
         damping=None,
+        boundary=None,
         xp=numpy,
     ):
         self.xp = xp
         self.nx, self.ny, self.dx = nx, ny, dx
         self.c, self.rho = c, rho
         self.dt = timestep(dx, c, cfl)
+        # An absorbing-boundary object (e.g. buddies.boundaries.CPML) whose
+        # ``apply_velocity``/``apply_pressure`` hooks correct the edge fields
+        # each step, or None for the plain sponge (folded into the masks above).
+        self._boundary = boundary
 
         # Fold the rigid-wall zeroing and the sponge damping into one factor per
         # velocity face (``_mvx``/``_mvy``) and one for pressure (``_mp``), so the
@@ -313,6 +318,9 @@ class AcousticFDTD:
                 vx *= self._mvx
                 vy *= self._mvy
 
+        if self._boundary is not None:
+            self._boundary.apply_velocity(self)
+
         # dp/dt = -rho c^2 div(v); faces outside the grid are rigid walls (v = 0).
         if self._pressure is not None and self._mp is not None:
             # One fused stencil pass over the grid, no divergence buffer.
@@ -326,6 +334,9 @@ class AcousticFDTD:
             p[:, 1:] += cvy
             if self._mp is not None:
                 p *= self._mp
+
+        if self._boundary is not None:
+            self._boundary.apply_pressure(self)
 
         t = self._step_count * self.dt
         if self._waveforms:
