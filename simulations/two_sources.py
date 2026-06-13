@@ -18,7 +18,7 @@ sim = AcousticFDTD(
     n,
     n,
     DX,
-    cfl=args.cfl,
+    cfl=args.cfl, xp=args.xp,
     sources=[
         Source(pos=(0.3, 0.3), waveform=tone(FREQ)),
         Source(pos=(0.7, 0.7), waveform=tone(22_000.0, amplitude=0.5)),

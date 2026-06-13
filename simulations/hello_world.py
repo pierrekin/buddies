@@ -15,7 +15,7 @@ STEPS = args.steps(1000)
 
 n = round(SIZE / DX)
 sim = AcousticFDTD(
-    n, n, DX, cfl=args.cfl, sources=[Source(pos=(SIZE / 2, SIZE / 2), waveform=tone(FREQ))]
+    n, n, DX, cfl=args.cfl, xp=args.xp, sources=[Source(pos=(SIZE / 2, SIZE / 2), waveform=tone(FREQ))]
 )
 
 frames = np.empty((args.nframes(STEPS), n, n), dtype=np.float32)

@@ -35,7 +35,7 @@ sim = AcousticFDTD(
     n,
     DX,
     c=C,
-    cfl=args.cfl,
+    cfl=args.cfl, xp=args.xp,
     sources=array(
         start=(ARRAY_X, cy - aperture / 2),
         end=(ARRAY_X, cy + aperture / 2),

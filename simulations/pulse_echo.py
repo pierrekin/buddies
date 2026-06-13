@@ -34,7 +34,7 @@ sim = AcousticFDTD(
     n,
     n,
     DX,
-    cfl=args.cfl,
+    cfl=args.cfl, xp=args.xp,
     sources=[Source(pos=(0.25, 0.5), waveform=pulse)],
     rigid=rigid,
     damping=edge_sponge((n, n), DX),

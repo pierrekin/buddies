@@ -1,8 +1,14 @@
-"""A swept-beam active sonar: the array fires one beamformed ping per
-angle, beamforms the same angle on receive (delay-and-sum of all element
-recordings, squaring the sidelobe suppression), and converts the first
-echo's time of flight into a range. Each angle's result is a true-scale
-vector channel, so the arrow tip should land on the rigid block."""
+"""Sonar v4: rounded targets instead of axis-aligned blocks.
+
+v1-v3 built every object out of rectangular cell slices, so a beam
+grazing a target's side hit a flat facet square to the grid. Real
+objects are curved, and a curved face spreads the specular return across
+steering angles instead of lighting up one. This version adds two mask
+helpers over a physical coordinate grid -- an ellipse and a capsule (a
+rectangle capped with semicircles, i.e. a stadium / lozenge) -- and
+seeds the scene with one of each in front of the same bumpy backstop as
+v3. The ellipse should read as a smooth arc of ranges across the sweep;
+the tilted capsule shows a flat broadside flanked by two rounded ends."""
 
 import math
 
@@ -21,31 +27,32 @@ from buddies.sim import (
 )
 
 SIZE_X = 2.0  # m
-SIZE_Y = 1.0  # m
+SIZE_Y = 1.5  # m
 FREQ = 15_000.0  # Hz
 ELEMENTS = 16
 ARRAY_X = 0.15  # m
 APERTURE = 0.3  # m
-ANGLES_DEG = range(-40, 41, 2)
-FOCUS_RANGE = 1.05  # m, sharpens the beam around the block's range
+ANGLES_DEG = range(-30, 31, 2)
+FOCUS_RANGE = 1.05  # m, sharpens the beam around the target range
 DETECT_THRESHOLD = 0.2  # of a window's transmit peak, for the emit edge
-# An echo is a rise of the smoothed envelope above its running minimum:
-# the transmit reverb only ever decays, so a rise means a reflection.
-RISE_FACTOR = 2.5
-MIN_ECHO = 0.05  # Pa, ignore rises in the quiet tail
+MIN_ECHO = 0.05  # Pa, below this a window counts as no echo
+# The smoothed envelope peaks ~3/4 of a cycle behind the arrival's leading
+# edge (one-cycle ramped pulse); subtracted from the time of flight.
+PEAK_OFFSET_S = 0.75 / FREQ
 # Color scale: loudest return is full hot, returns this many dB below the
 # loudest fade to cold.
 COLOR_SPAN_DB = 30.0
 COLD = np.array((50, 50, 140, 230))  # RGBA
 HOT = np.array((255, 180, 40, 255))
-OUT = "captures/sonar_sweep.npz"
+OUT = "captures/sonar_sweep4.npz"
 
-args = simargs.parse(__doc__, FREQ, capture_every=4)
+args = simargs.parse(__doc__, FREQ, capture_every=8)
 DX = args.dx
-PING_STEPS = args.steps(1500)  # round trip to the block is ~1270 default steps
-# Ignore the mic until the transmit has fully passed. At ±40 deg steering
-# the element delay spread stretches the transmit to ~170 steps plus ring.
-BLANK_STEPS = args.steps(320)
+PING_STEPS = args.steps(2400)  # round trip to the backstop at +-40 deg
+# Ignore the mic until the transmit has fully passed. Loudest-return
+# ranging has no reverb rejection, so this must outlast the entire
+# transmit tail even at ±40 deg steering (delay spread ~170 steps + ring).
+BLANK_STEPS = args.steps(600)
 # Trailing-max window, half a pulse, bridges zero crossings.
 SMOOTH_STEPS = args.steps(30)
 
@@ -80,13 +87,64 @@ for k, deg in enumerate(ANGLES_DEG):
 
 rigid = np.zeros((nx, ny), dtype=bool)
 overlay = np.zeros((nx, ny, 4), dtype=np.uint8)
-# 12x12 cm block in the bottom half, ~1.06 m from the array at ~-14 deg.
-block = (
-    slice(round(1.19 / DX), round(1.31 / DX)),
-    slice(round(0.17 / DX), round(0.29 / DX)),
-)
-rigid[block] = True
-overlay[block] = (140, 110, 70, 220)  # RGBA
+
+# Cell-center coordinates in metres. X varies along axis 0 (range), Y along
+# axis 1 (cross-range); broadcasting these gives a (nx, ny) field per shape.
+X = (np.arange(nx)[:, None] + 0.5) * DX
+Y = (np.arange(ny)[None, :] + 0.5) * DX
+
+
+def ellipse(cx, cy, rx, ry):
+    """Filled axis-aligned ellipse, semi-axes ``rx`` (range) and ``ry``."""
+    return ((X - cx) / rx) ** 2 + ((Y - cy) / ry) ** 2 <= 1.0
+
+
+def capsule(p0, p1, r):
+    """Filled capsule (stadium): every cell within ``r`` of the segment
+    ``p0``->``p1``. A rectangle of half-width ``r`` with semicircular caps,
+    so it has a flat broadside and two rounded ends and can be tilted."""
+    x0, y0 = p0
+    x1, y1 = p1
+    dx, dy = x1 - x0, y1 - y0
+    length2 = dx * dx + dy * dy
+    # Parameter of the nearest point on the segment, clamped to its ends.
+    t = np.clip(((X - x0) * dx + (Y - y0) * dy) / length2, 0.0, 1.0)
+    return np.hypot(X - (x0 + t * dx), Y - (y0 + t * dy)) <= r
+
+
+def place(mask, color):
+    rigid[mask] = True
+    overlay[mask] = color
+
+
+# Ellipse ~1.04 m from the array at ~-13 deg (where v3's lower block sat),
+# 12 cm across the beam by 6 cm deep -- a smoothly curved target whose
+# face slides the specular return across the beams that look at it.
+place(ellipse(1.16, 0.52, 0.03, 0.06), (140, 110, 70, 220))
+# Capsule above the axis, ~0.82 m out at ~+10 deg. Its long axis runs nearly
+# cross-range, so the flat broadside faces back toward the array and lights
+# up the mid steering angles, while the rounded end caps return to the
+# steeper +angles -- the curved-vs-flat contrast the ellipse can't show.
+place(capsule((0.935, 0.84), (0.965, 0.96), 0.025), (110, 140, 70, 220))
+
+# Full-height bumpy backstop: deepest face at x = 1.55, bumps protruding
+# up to BUMP_HEIGHT toward the array. Smoothed uniform noise gives facets
+# of ~BUMP_WIDTH lateral size. Seeded so the surface is reproducible.
+BUMP_HEIGHT = 0.05  # m, ~half a wavelength
+BUMP_WIDTH = 0.05  # m, lateral feature size
+WALL_X = 1.55  # m, face of the deepest troughs
+WALL_THICKNESS = 0.05  # m
+
+kernel_cells = round(BUMP_WIDTH / DX)
+noise = np.random.default_rng(7).random(ny + kernel_cells)
+profile = np.convolve(noise, np.ones(kernel_cells) / kernel_cells, mode="valid")[:ny]
+profile = (profile - profile.min()) / (profile.max() - profile.min())
+bump_cells = np.rint(profile * BUMP_HEIGHT / DX).astype(int)
+wall_cell = round(WALL_X / DX)
+back_cell = round((WALL_X + WALL_THICKNESS) / DX)
+for iy in range(ny):
+    rigid[wall_cell - bump_cells[iy] : back_cell, iy] = True
+    overlay[wall_cell - bump_cells[iy] : back_cell, iy] = (80, 80, 90, 220)
 
 sim = AcousticFDTD(
     nx, ny, DX, cfl=args.cfl, xp=args.xp, sources=sources, rigid=rigid, damping=edge_sponge((nx, ny), DX)
@@ -108,8 +166,8 @@ for i in simargs.progress(STEPS):
 recordings = to_numpy(recordings_dev)
 
 # Per ping: delay-and-sum the element recordings with the ping's own
-# delays, find the transmit's leading edge and the first echo after
-# blanking, then range = c * time difference / 2 minus the alignment
+# delays, find the transmit's leading edge, then take the LOUDEST arrival
+# after blanking. Range = c * time difference / 2 minus the alignment
 # offset (echoes aligned this way arrive (dmax - FOCUS_RANGE)/c late).
 rx = np.empty(STEPS, dtype=np.float32)
 results = []  # (deg, dist, loudness, ready step)
@@ -132,16 +190,15 @@ for k, deg in enumerate(ANGLES_DEG):
         [window[max(0, i - SMOOTH_STEPS) : i + 1].max() for i in range(len(window))]
     )
     listen = env[BLANK_STEPS:]
-    rises = (listen > RISE_FACTOR * np.minimum.accumulate(listen)) & (listen > MIN_ECHO)
-    echo_rel = int(np.argmax(rises)) if rises.any() else None
-
-    if echo_rel is None:
+    loudness = float(listen.max())
+    if loudness < MIN_ECHO:
         results.append((deg, None, 0.0, 0))
     else:
-        dist = sim.c * (BLANK_STEPS + echo_rel - emit) * sim.dt / 2 - (
-            dists.max() - FOCUS_RANGE
+        echo_rel = int(listen.argmax())
+        dist = (
+            sim.c * ((BLANK_STEPS + echo_rel - emit) * sim.dt - PEAK_OFFSET_S) / 2
+            - (dists.max() - FOCUS_RANGE)
         )
-        loudness = float(listen[echo_rel : echo_rel + 2 * SMOOTH_STEPS].max())
         results.append((deg, dist, loudness, (k + 1) * PING_STEPS))
 
 loudest = max(loudness for _, dist, loudness, _ in results if dist is not None)

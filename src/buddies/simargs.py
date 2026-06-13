@@ -5,6 +5,7 @@ Every script exposes the three quality/cost dials:
 --resolution     cells per wavelength (accuracy of the wave itself)
 --cfl            fraction of the 2D CFL stability limit used for dt
 --capture-every  record every Nth step to the capture file
+--gpu            run on the GPU (cupy) instead of the CPU (numpy)
 
 Scripts state step-count constants (durations, windows) in units of
 their default timestep; ``Args.steps`` rescales them so the simulated
@@ -17,6 +18,7 @@ from dataclasses import dataclass
 
 from tqdm import tqdm
 
+from buddies.backend import get_backend
 from buddies.sim import CFL_SAFETY_FACTOR, SOUND_SPEED_SEAWATER, timestep
 
 DEFAULT_RESOLUTION = 10.0  # cells per wavelength
@@ -35,6 +37,7 @@ class Args:
     dx: float  # m, from the wavelength and resolution
     dt: float  # s, from dx and cfl
     default_dt: float  # s, dt at the script's default knobs
+    xp: object  # the array module: numpy (CPU) or cupy (GPU)
 
     def steps(self, n):
         """Rescale a step count written for the default knobs so it spans
@@ -65,6 +68,7 @@ def parse(
     ap.add_argument(
         "--capture-every", type=int, default=capture_every, help="record every Nth step"
     )
+    ap.add_argument("--gpu", action="store_true", help="run on the GPU via cupy")
     ns = ap.parse_args()
     dx = c / freq / ns.resolution
     return Args(
@@ -74,4 +78,5 @@ def parse(
         dx=dx,
         dt=timestep(dx, c, ns.cfl),
         default_dt=timestep(c / freq / resolution, c, cfl),
+        xp=get_backend("cupy" if ns.gpu else "numpy"),
     )

@@ -53,7 +53,7 @@ sim = AcousticFDTD(
     n,
     n,
     DX,
-    cfl=args.cfl,
+    cfl=args.cfl, xp=args.xp,
     sources=[
         Source(pos=p, waveform=pulse(k * HOP_STEPS * DT))
         for k, p in enumerate(POSITIONS)

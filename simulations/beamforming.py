@@ -22,7 +22,7 @@ sim = AcousticFDTD(
     n,
     n,
     DX,
-    cfl=args.cfl,
+    cfl=args.cfl, xp=args.xp,
     sources=array(
         start=ARRAY_START,
         end=ARRAY_END,

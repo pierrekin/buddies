@@ -8,7 +8,7 @@ import math
 
 import numpy as np
 
-from buddies import capture, probe, simargs
+from buddies import capture, simargs
 from buddies.capture import Channel
 from buddies.sim import (
     AcousticFDTD,
@@ -99,18 +99,23 @@ rigid[backstop] = True
 overlay[backstop] = (80, 80, 90, 220)
 
 sim = AcousticFDTD(
-    nx, ny, DX, cfl=args.cfl, sources=sources, rigid=rigid, damping=edge_sponge((nx, ny), DX)
+    nx, ny, DX, cfl=args.cfl, xp=args.xp, sources=sources, rigid=rigid, damping=edge_sponge((nx, ny), DX)
 )
 
 element_y = np.linspace(CENTER[1] - APERTURE / 2, CENTER[1] + APERTURE / 2, ELEMENTS)
-recordings = np.empty((STEPS, ELEMENTS), dtype=np.float32)
+# Read every element in one device gather per step into a device buffer,
+# copied to the host once at the end. A host<-device sync per element per
+# step would dominate the GPU run (see simargs --gpu).
+element_ix = args.xp.asarray([round(ARRAY_X / DX)] * ELEMENTS)
+element_iy = args.xp.asarray([round(ey / DX) for ey in element_y])
+recordings_dev = args.xp.empty((STEPS, ELEMENTS), dtype=np.float32)
 frames = np.empty((args.nframes(STEPS), nx, ny), dtype=np.float32)
 for i in simargs.progress(STEPS):
     sim.step()
     if i % args.capture_every == 0:
         frames[i // args.capture_every] = to_numpy(sim.p)
-    for j, ey in enumerate(element_y):
-        recordings[i, j] = probe.pressure(sim, (ARRAY_X, ey))
+    recordings_dev[i] = sim.p[element_ix, element_iy]
+recordings = to_numpy(recordings_dev)
 
 # Per ping: delay-and-sum the element recordings with the ping's own
 # delays, find the transmit's leading edge, then take the LOUDEST arrival

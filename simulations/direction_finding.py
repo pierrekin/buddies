@@ -7,7 +7,7 @@ import math
 
 import numpy as np
 
-from buddies import capture, probe, simargs
+from buddies import capture, simargs
 from buddies.capture import Channel
 from buddies.sim import AcousticFDTD, Source, edge_sponge, to_numpy, tone
 
@@ -37,7 +37,7 @@ sim = AcousticFDTD(
     n,
     n,
     DX,
-    cfl=args.cfl,
+    cfl=args.cfl, xp=args.xp,
     sources=[Source(pos=SOURCE, waveform=pulse)],
     damping=edge_sponge((n, n), DX),
 )
@@ -45,15 +45,21 @@ sim = AcousticFDTD(
 mic_pos = [(ARRAY_X, y) for y in np.linspace(*ARRAY_SPAN, MICS)]
 lights = [Channel(f"m{j}", kind="color", dt=sim.dt, pos=p) for j, p in enumerate(mic_pos)]
 
-recordings = np.empty((STEPS, MICS), dtype=np.float32)
+# Gather all mics in one device read per step into a device buffer, copied
+# to the host once at the end. A host<-device sync per mic per step would
+# dominate the GPU run (see simargs --gpu).
+mic_ix = args.xp.asarray([round(px / DX) for px, _ in mic_pos])
+mic_iy = args.xp.asarray([round(py / DX) for _, py in mic_pos])
+recordings_dev = args.xp.empty((STEPS, MICS), dtype=np.float32)
 frames = np.empty((args.nframes(STEPS), n, n), dtype=np.float32)
 for i in simargs.progress(STEPS):
     sim.step()
     if i % args.capture_every == 0:
         frames[i // args.capture_every] = to_numpy(sim.p)
-    for j, p in enumerate(mic_pos):
-        recordings[i, j] = probe.pressure(sim, p)
-        lights[j].append(recordings[i, j])
+    recordings_dev[i] = sim.p[mic_ix, mic_iy]
+recordings = to_numpy(recordings_dev)
+for j in range(MICS):
+    lights[j].values = recordings[:, j].tolist()
 
 # Time of arrival per mic: first crossing of the detection threshold.
 envelopes = np.abs(recordings)

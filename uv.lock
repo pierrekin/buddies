@@ -13,13 +13,20 @@ dependencies = [
     { name = "tqdm" },
 ]
 
+[package.optional-dependencies]
+gpu = [
+    { name = "cupy-rocm-7-0" },
+]
+
 [package.metadata]
 requires-dist = [
+    { name = "cupy-rocm-7-0", marker = "extra == 'gpu'", specifier = ">=14.1.1" },
     { name = "numpy", specifier = ">=2.4.6" },
     { name = "pyqtgraph", specifier = ">=0.14.0" },
     { name = "pyside6", specifier = ">=6.11.1" },
     { name = "tqdm", specifier = ">=4.68.2" },
 ]
+provides-extras = ["gpu"]
 
 [[package]]
 name = "colorama"
@@ -28,6 +35,20 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/d8/53/6f443c9a4a8358a93a6792e2acffb9d9d5cb0a5cfd8802644b7b1c9a02e4/colorama-0.4.6.tar.gz", hash = "sha256:08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44", size = 27697, upload-time = "2022-10-25T02:36:22.414Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d1/d6/3965ed04c63042e047cb6a3e6ed1a63a35087b6a609aa3a15ed8ac56c221/colorama-0.4.6-py2.py3-none-any.whl", hash = "sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6", size = 25335, upload-time = "2022-10-25T02:36:20.889Z" },
+]
+
+[[package]]
+name = "cupy-rocm-7-0"
+version = "14.1.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cc/04/98dad22f8dd9f0a486f016c4efa24bc10b41205823b1faee6170174a3870/cupy_rocm_7_0-14.1.1-cp312-cp312-manylinux2014_x86_64.whl", hash = "sha256:bfd9cb126035f43748733c9de38732741ea0dabe38cb1212ba747f8293abce0f", size = 73602416, upload-time = "2026-06-01T04:55:08.908Z" },
+    { url = "https://files.pythonhosted.org/packages/c9/e3/592a93d2154cf38e82b3970e2321f5cfe03eb4b6f04939413df2c398f687/cupy_rocm_7_0-14.1.1-cp313-cp313-manylinux2014_x86_64.whl", hash = "sha256:1e1a7bba0233718f43afe1f65e5804e256de2e3c86d125f9615b9e89ebd7e04d", size = 73141354, upload-time = "2026-06-01T04:55:13.211Z" },
+    { url = "https://files.pythonhosted.org/packages/08/fb/8c232a4b4812a4e474e32022fb2ee5f334468dd2aad37ada9bd9274e1bc4/cupy_rocm_7_0-14.1.1-cp314-cp314-manylinux2014_x86_64.whl", hash = "sha256:3168563dd8e74600247926aa455be15d04ac1b1c4a6cb248d0e4fc437b4cde62", size = 72538313, upload-time = "2026-06-01T04:55:17.126Z" },
+    { url = "https://files.pythonhosted.org/packages/c4/16/a34bd7c9fc28cd76e7d5f041e34d8d7539530c5ef81a69139dde279f6261/cupy_rocm_7_0-14.1.1-cp314-cp314t-manylinux2014_x86_64.whl", hash = "sha256:8bef82c1c3f6480eb836d64a6dc8b603f74edb2a9a66f0f1854162e20483f95c", size = 72849212, upload-time = "2026-06-01T04:55:27.424Z" },
 ]
 
 [[package]]
