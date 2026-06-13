@@ -20,6 +20,7 @@ from dataclasses import dataclass
 
 from tqdm import tqdm
 
+from buddies import profiling
 from buddies.backend import get_backend
 from buddies.sim import CFL_SAFETY_FACTOR, SOUND_SPEED_SEAWATER, timestep
 
@@ -28,7 +29,11 @@ DEFAULT_PERCENTILE = 99.5
 
 
 def progress(steps):
-    """``range(steps)`` wrapped in a progress bar (percentage, rate, ETA)."""
+    """``range(steps)`` wrapped in a progress bar (percentage, rate, ETA), or
+    the active profiler's truncated, timed iterator when one is profiling."""
+    prof = profiling.active()
+    if prof is not None:
+        return prof.iterate(steps)
     return tqdm(range(steps), unit="step")
 
 

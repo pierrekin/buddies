@@ -1,6 +1,7 @@
 """buddies: simulate -> process -> view.
 
     buddies simulate <sim> [run]            run the simulation
+    buddies profile  <sim>                  time a truncated run's throughput
     buddies process  <sim> [run] [out]      prepare a run for viewing
     buddies view     <sim> [out]            open the viewer
     buddies show     <sim> [run] [out]      run whatever is missing, then view
@@ -27,7 +28,7 @@ import json
 import os
 import sys
 
-from buddies import simargs, store
+from buddies import profiling, simargs, store
 
 ROOT = "output"
 SIMS_DIR = "simulations"
@@ -153,6 +154,30 @@ def cmd_simulate(a):
     print(f"wrote {_write_master(mod, a.sim, ns.run, args)}")
 
 
+def cmd_profile(a):
+    mod = _require_simulate(a.sim)
+    ap = argparse.ArgumentParser(
+        prog=f"buddies profile {a.sim}", description="truncated-run throughput profile"
+    )
+    ap.add_argument("--seconds", type=float, default=5.0, help="measurement window after warmup")
+    ap.add_argument("--warmup", type=float, default=0.2, help="warmup before timing")
+    ap.add_argument(
+        "--breakdown", action="store_true",
+        help="attribute time to step/capture/record (per-phase device sync; rate not comparable)",
+    )
+    simargs.add_sim_args(ap, **getattr(mod, "DEFAULTS", {}))
+    ns = ap.parse_args(a.rest)
+    args = simargs.sim_args(ns, mod.FREQ)
+
+    prof = profiling.Profiler(args.xp, warmup_s=ns.warmup, budget_s=ns.seconds, breakdown=ns.breakdown)
+    with profiling.session(prof):
+        try:
+            mod.run(args, profiling.ProfileWriter())
+        except profiling.Stop:
+            pass
+    print(profiling.format_report(prof, args, a.sim))
+
+
 def cmd_process(a):
     proc_mod, proc = _processor(a.sim)
     ap = argparse.ArgumentParser(prog=f"buddies process {a.sim}")
@@ -228,6 +253,7 @@ def main():
     sub = ap.add_subparsers(dest="cmd", required=True)
     for name, func, help_text in (
         ("simulate", cmd_simulate, "run the simulation"),
+        ("profile", cmd_profile, "time a truncated run's throughput"),
         ("process", cmd_process, "prepare a run for viewing"),
         ("view", cmd_view, "open the viewer"),
         ("show", cmd_show, "run whatever is missing, then view"),

@@ -19,6 +19,8 @@ from typing import Callable
 
 import numpy
 
+from buddies import profiling
+
 SOUND_SPEED_SEAWATER = 1500.0  # m/s
 DENSITY_SEAWATER = 1000.0  # kg/m^3
 # Fraction of the 2D CFL stability limit dx / (c * sqrt(2)) used for dt.
@@ -214,9 +216,17 @@ class AcousticFDTD:
         # into one cell raises p by rho c^2 q dt / dx^2, making the radiated
         # field independent of dt and dx.
         self._cq = xp.float32(rho * c * c * self.dt / dx**2)
+        profiling.register_grid(nx, ny)
 
     def step(self):
         """Advance one timestep, injecting each source's waveform at its cell."""
+        if profiling.BREAKDOWN:
+            with profiling.section("step"):
+                self._step()
+        else:
+            self._step()
+
+    def _step(self):
         p, vx, vy = self.p, self.vx, self.vy
 
         # rho dv/dt = -grad(p)
@@ -251,6 +261,9 @@ class AcousticFDTD:
     def record(self):
         """Pressure (Pa) at every registered receiver, as an ``xp`` array of
         shape ``(len(receivers),)`` in registration order."""
+        if profiling.BREAKDOWN:
+            with profiling.section("record"):
+                return self.p[self._rx_ix, self._rx_iy]
         return self.p[self._rx_ix, self._rx_iy]
 
     def _scatter_add(self, p, ix, iy, vals):
@@ -275,5 +288,6 @@ def to_numpy(a):
         return a
     # Checked by module name so cupy stays an optional dependency.
     if type(a).__module__.split(".")[0] == "cupy":
-        return a.get()
+        with profiling.section("capture"):
+            return a.get()
     raise TypeError(f"expected a numpy or cupy ndarray, got {type(a).__name__}")
