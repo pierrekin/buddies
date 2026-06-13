@@ -67,6 +67,9 @@ class Viewer(QtWidgets.QWidget):
         self.slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         self.slider.setRange(0, self.nframes - 1)
         self.slider.valueChanged.connect(self.set_frame)
+        self.slider.sliderPressed.connect(self._scrub_start)
+        self.slider.sliderReleased.connect(self._scrub_end)
+        self._resume_after_scrub = False
         self.time_label = QtWidgets.QLabel()
 
         controls = QtWidgets.QHBoxLayout()
@@ -189,6 +192,17 @@ class Viewer(QtWidgets.QWidget):
 
     def _advance(self):
         self.set_frame((self._frame + 1) % self.nframes)
+
+    def _scrub_start(self):
+        # Pause while dragging, remembering whether to resume on release.
+        self._resume_after_scrub = self.timer.isActive()
+        if self._resume_after_scrub:
+            self.toggle()
+
+    def _scrub_end(self):
+        if self._resume_after_scrub:
+            self.toggle()
+            self._resume_after_scrub = False
 
     def toggle(self):
         if self.timer.isActive():
