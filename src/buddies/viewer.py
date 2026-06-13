@@ -2,6 +2,7 @@
 (vector arrows, color markers) and synced scalar plots."""
 
 import argparse
+import signal
 import sys
 
 import numpy as np
@@ -207,6 +208,16 @@ def main():
     app = pg.mkQApp("FDTD viewer")
     viewer = Viewer(args.run, capture.load(args.run), args.fps)
     viewer.show()
+
+    # Qt's event loop runs in C++ and won't deliver SIGINT to Python until the
+    # interpreter regains control, so a bare Ctrl-C is ignored while the window
+    # is up. Quit the app on SIGINT and keep a no-op timer ticking so the
+    # interpreter wakes often enough to actually run the handler.
+    signal.signal(signal.SIGINT, lambda *_: app.quit())
+    sigint_timer = QtCore.QTimer()
+    sigint_timer.timeout.connect(lambda: None)
+    sigint_timer.start(100)
+
     app.exec()
 
 
