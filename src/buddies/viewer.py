@@ -103,9 +103,11 @@ class Viewer(QtWidgets.QWidget):
                 raise ValueError(f"channel {ch.name!r} has unknown kind {ch.kind!r}")
         glw.ci.layout.setRowStretchFactor(0, FIELD_ROW_STRETCH)
 
-        self.play_button = QtWidgets.QPushButton("Pause")
+        self.play_button = QtWidgets.QPushButton("Play")
         self.play_button.clicked.connect(self.toggle)
         QtGui.QShortcut(QtGui.QKeySequence(QtCore.Qt.Key.Key_Space), self, self.toggle)
+        QtGui.QShortcut(QtGui.QKeySequence(QtCore.Qt.Key.Key_Left), self, lambda: self.step(-1))
+        QtGui.QShortcut(QtGui.QKeySequence(QtCore.Qt.Key.Key_Right), self, lambda: self.step(1))
         self.slider = FineSlider(QtCore.Qt.Orientation.Horizontal)
         self.slider.setRange(0, self.nframes - 1)
         self.slider.valueChanged.connect(self.set_frame)
@@ -132,7 +134,6 @@ class Viewer(QtWidgets.QWidget):
         self.timer.setInterval(round(1000 / fps))
         self.timer.timeout.connect(self._advance)
         self.set_frame(0)
-        self.timer.start()
 
     def _build_field_view(self, glw):
         _, nx, ny = self.frames.shape
@@ -239,6 +240,12 @@ class Viewer(QtWidgets.QWidget):
 
     def _advance(self):
         self.set_frame((self._frame + 1) % self.nframes)
+
+    def step(self, delta):
+        # Pause so the single step isn't immediately overwritten by playback.
+        if self.timer.isActive():
+            self.toggle()
+        self.set_frame((self._frame + delta) % self.nframes)
 
     def _scrub_start(self):
         # Pause while dragging, remembering whether to resume on release.
