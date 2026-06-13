@@ -142,6 +142,11 @@ class Viewer(QtWidgets.QWidget):
         plot.setAspectLocked(True)
         plot.setLabel("bottom", "x", units="m")
         plot.setLabel("left", "y", units="m")
+        # Pin the view to the domain once. Overlay graphics (vector arrows,
+        # markers, labels) can extend past the field, but auto-ranging to fit
+        # them would rescale the axes mid-playback, so freeze the range here.
+        plot.setRange(xRange=(0, self.domain[0]), yRange=(0, self.domain[1]), padding=0)
+        plot.disableAutoRange()
         self.field_plot = plot
 
         self.cmap = pg.colormap.get(self.st.meta.get("colormap", DEFAULT_COLORMAP))
