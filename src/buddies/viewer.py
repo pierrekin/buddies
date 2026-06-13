@@ -28,6 +28,16 @@ FIELD_ROW_STRETCH = 4  # field view height relative to each scalar plot row
 VECTOR_LENGTH_FRACTION = 0.1
 
 
+class _JumpSliderStyle(QtWidgets.QProxyStyle):
+    """Makes a left-click on the slider groove snap the handle to the cursor
+    and treat the press as a drag, instead of the default page-step jump."""
+
+    def styleHint(self, hint, option=None, widget=None, returnData=None):
+        if hint == QtWidgets.QStyle.StyleHint.SH_Slider_AbsoluteSetButtons:
+            return int(QtCore.Qt.MouseButton.LeftButton.value)
+        return super().styleHint(hint, option, widget, returnData)
+
+
 class Viewer(QtWidgets.QWidget):
     def __init__(self, title, cap, fps):
         super().__init__()
@@ -69,6 +79,8 @@ class Viewer(QtWidgets.QWidget):
         self.slider.valueChanged.connect(self.set_frame)
         self.slider.sliderPressed.connect(self._scrub_start)
         self.slider.sliderReleased.connect(self._scrub_end)
+        self._slider_style = _JumpSliderStyle(self.slider.style())
+        self.slider.setStyle(self._slider_style)
         self._resume_after_scrub = False
         self.time_label = QtWidgets.QLabel()
 
