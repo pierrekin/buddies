@@ -24,12 +24,11 @@ import math
 
 import numpy as np
 
-from buddies import simargs
+from buddies import boundaries, simargs
 from buddies.sim import (
     SOUND_SPEED_SEAWATER,
     AcousticFDTD,
     Source,
-    edge_sponge,
     receiver_array,
     to_numpy,
     tone,
@@ -65,7 +64,7 @@ WALL_X = 3.8  # m, mean range of the wall's near face
 BUMP_HEIGHT = WAVELENGTH  # m, protrusion toward the array (in range)
 BUMP_WIDTH = WAVELENGTH  # m, lateral (cross-range) feature size
 
-DEFAULTS = {"capture_every": 16}
+DEFAULTS = {"capture_every": 16, "sponge_cells": 32}
 
 
 def look(range_m, deg):
@@ -124,7 +123,7 @@ def run(args, out):
 
     sim = AcousticFDTD(
         nx, ny, DX, cfl=args.cfl, xp=args.xp, sources=sources, receivers=mics, rigid=rigid,
-        damping=edge_sponge((nx, ny), DX),
+        **boundaries.make(args, (nx, ny), DX),
     )
 
     # Step counts from physical path lengths: cover the two-way trip across the

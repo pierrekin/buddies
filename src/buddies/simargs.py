@@ -22,7 +22,7 @@ from tqdm import tqdm
 
 from buddies import profiling
 from buddies.backend import get_backend
-from buddies.sim import CFL_SAFETY_FACTOR, SOUND_SPEED_SEAWATER, timestep
+from buddies.sim import CFL_SAFETY_FACTOR, DEFAULT_SPONGE_CELLS, SOUND_SPEED_SEAWATER, timestep
 
 DEFAULT_RESOLUTION = 10.0  # cells per wavelength
 DEFAULT_PERCENTILE = 99.5
@@ -47,6 +47,8 @@ class Args:
     default_dt: float  # s, dt at the simulation's default knobs
     xp: object  # the array module: numpy (CPU) or cupy (GPU)
     max_steps: int | None = None  # cap from --duration, or None for the full run
+    boundary: str = "sponge"  # absorbing boundary kind (see buddies.boundaries)
+    sponge_cells: int = DEFAULT_SPONGE_CELLS  # sponge thickness in cells
 
     def steps(self, n):
         """Rescale a step count written for the default knobs so it spans the
@@ -70,13 +72,18 @@ class ProcessArgs:
     percentile: float
 
 
-def add_sim_args(ap, resolution=DEFAULT_RESOLUTION, cfl=CFL_SAFETY_FACTOR, capture_every=1):
+def add_sim_args(
+    ap, resolution=DEFAULT_RESOLUTION, cfl=CFL_SAFETY_FACTOR, capture_every=1,
+    boundary="sponge", sponge_cells=DEFAULT_SPONGE_CELLS,
+):
     """Add the simulate-stage knobs, with this simulation's defaults."""
     ap.add_argument("--resolution", type=float, default=resolution, help="cells per wavelength")
     ap.add_argument("--cfl", type=float, default=cfl, help="fraction of the CFL stability limit")
     ap.add_argument("--capture-every", type=int, default=capture_every, help="record every Nth step")
     ap.add_argument("--gpu", action="store_true", help="run on the GPU via cupy")
     ap.add_argument("--duration", type=float, default=None, help="cap the simulated time in seconds (truncates the run)")
+    ap.add_argument("--boundary", choices=("sponge", "pml"), default=boundary, help="absorbing boundary type")
+    ap.add_argument("--sponge-cells", type=int, default=sponge_cells, help="sponge thickness in cells")
     # Stash the baseline so ``default_dt`` (and thus step rescaling) stays tied
     # to the simulation's defaults rather than any command-line overrides.
     ap.set_defaults(_baseline_resolution=resolution, _baseline_cfl=cfl)
@@ -97,6 +104,8 @@ def sim_args(ns, freq, c=SOUND_SPEED_SEAWATER):
         default_dt=timestep(default_dx, c, ns._baseline_cfl),
         xp=get_backend("cupy" if ns.gpu else "numpy"),
         max_steps=round(ns.duration / dt) if ns.duration else None,
+        boundary=ns.boundary,
+        sponge_cells=ns.sponge_cells,
     )
 
 

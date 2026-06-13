@@ -12,8 +12,8 @@ import math
 
 import numpy as np
 
-from buddies import simargs
-from buddies.sim import AcousticFDTD, Source, edge_sponge, receiver_array, to_numpy, tone
+from buddies import boundaries, simargs
+from buddies.sim import AcousticFDTD, Source, receiver_array, to_numpy, tone
 from buddies.store import Channel
 
 SIZE_X = 2.0  # m
@@ -82,7 +82,7 @@ def run(args, out):
 
     sim = AcousticFDTD(
         nx, ny, DX, cfl=args.cfl, xp=args.xp, sources=sources, receivers=mics, rigid=rigid,
-        damping=edge_sponge((nx, ny), DX),
+        **boundaries.make(args, (nx, ny), DX),
     )
 
     recordings_dev = args.xp.empty((steps, ELEMENTS), dtype=np.float32)
