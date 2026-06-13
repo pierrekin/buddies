@@ -164,6 +164,11 @@ class AcousticFDTD:
             if not (0 <= ix < nx and 0 <= iy < ny):
                 raise ValueError(f"source at {src.pos} m is outside the {nx}x{ny} grid")
             self._sources.append(((ix, iy), src.waveform))
+        # Precomputed for batched injection: one scatter-add per step instead of
+        # a Python loop of N scalar writes (N kernel launches on the GPU).
+        self._waveforms = [waveform for _, waveform in self._sources]
+        self._src_ix = xp.asarray([cell[0] for cell, _ in self._sources], dtype=int)
+        self._src_iy = xp.asarray([cell[1] for cell, _ in self._sources], dtype=int)
 
         self._step_count = 0
         self.p = xp.zeros((nx, ny), dtype=xp.float32)
@@ -202,9 +207,24 @@ class AcousticFDTD:
             p *= self._damp_p
 
         t = self._step_count * self.dt
-        for cell, waveform in self._sources:
-            p[cell] += self._cq * self.xp.float32(waveform(t))
+        if self._waveforms:
+            vals = self.xp.asarray(
+                [waveform(t) for waveform in self._waveforms], dtype=self.xp.float32
+            )
+            vals *= self._cq
+            self._scatter_add(p, self._src_ix, self._src_iy, vals)
         self._step_count += 1
+
+    def _scatter_add(self, p, ix, iy, vals):
+        """Accumulate ``vals`` into ``p[ix, iy]``, summing any duplicate cells.
+        One scatter replaces a Python loop of per-source scalar writes (each its
+        own kernel launch on the GPU). numpy and cupy spell it differently."""
+        if self.xp is numpy:
+            numpy.add.at(p, (ix, iy), vals)
+        else:
+            import cupyx
+
+            cupyx.scatter_add(p, (ix, iy), vals)
 
 
 def to_numpy(a):
