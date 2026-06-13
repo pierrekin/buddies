@@ -2,24 +2,27 @@
 
 import numpy as np
 
-from buddies import capture
+from buddies import capture, simargs
 from buddies.sim import AcousticFDTD, array, edge_sponge, to_numpy, tone
 
 SIZE = 1.0  # m
-DX = 0.01  # m
 FREQ = 15_000.0  # Hz
-STEPS = 1000
 ELEMENTS = 16
 ARRAY_START = (0.2, 0.2)  # m
 ARRAY_END = (0.2, 0.8)  # m
 FOCUS = (0.7, 0.5)  # m
 OUT = "captures/beamforming.npz"
 
+args = simargs.parse(__doc__, FREQ)
+DX = args.dx
+STEPS = args.steps(1000)
+
 n = round(SIZE / DX)
 sim = AcousticFDTD(
     n,
     n,
     DX,
+    cfl=args.cfl,
     sources=array(
         start=ARRAY_START,
         end=ARRAY_END,
@@ -30,10 +33,14 @@ sim = AcousticFDTD(
     damping=edge_sponge((n, n), DX),
 )
 
-frames = np.empty((STEPS, n, n), dtype=np.float32)
+frames = np.empty((args.nframes(STEPS), n, n), dtype=np.float32)
 for i in range(STEPS):
     sim.step()
-    frames[i] = to_numpy(sim.p)
+    if i % args.capture_every == 0:
+        frames[i // args.capture_every] = to_numpy(sim.p)
 
-capture.save(OUT, capture.Capture(frames=frames, dt=sim.dt, dx=DX, c=sim.c))
+capture.save(
+    OUT,
+    capture.Capture(frames=frames, dt=sim.dt * args.capture_every, dx=DX, c=sim.c),
+)
 print(f"wrote {OUT}: frames {frames.shape}, peak |p| = {np.abs(frames).max():.3f} Pa")

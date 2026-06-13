@@ -3,16 +3,19 @@ hears the outgoing pulse and then its echo."""
 
 import numpy as np
 
-from buddies import capture, probe
+from buddies import capture, probe, simargs
 from buddies.capture import Channel
 from buddies.sim import AcousticFDTD, Source, edge_sponge, to_numpy, tone
 
 SIZE = 1.0  # m
-DX = 0.01  # m
 FREQ = 15_000.0  # Hz
-STEPS = 1000
 MIC = (0.4, 0.5)  # m
+SLAB_COLOR = (140, 110, 70, 220)  # RGBA
 OUT = "captures/echo_mic.npz"
+
+args = simargs.parse(__doc__, FREQ)
+DX = args.dx
+STEPS = args.steps(1000)
 
 _tone = tone(FREQ, ramp_periods=1.0)
 
@@ -21,8 +24,6 @@ def pulse(t):
     """One cycle of a 1 Pa @ 1 m tone, then silence."""
     return _tone(t) if t < 1 / FREQ else 0.0
 
-
-SLAB_COLOR = (140, 110, 70, 220)  # RGBA
 
 n = round(SIZE / DX)
 rigid = np.zeros((n, n), dtype=bool)
@@ -36,22 +37,29 @@ sim = AcousticFDTD(
     n,
     n,
     DX,
+    cfl=args.cfl,
     sources=[Source(pos=(0.25, 0.5), waveform=pulse)],
     rigid=rigid,
     damping=edge_sponge((n, n), DX),
 )
 
 mic = Channel("mic (Pa)", kind="scalar", dt=sim.dt, pos=MIC)
-frames = np.empty((STEPS, n, n), dtype=np.float32)
+frames = np.empty((args.nframes(STEPS), n, n), dtype=np.float32)
 for i in range(STEPS):
     sim.step()
-    frames[i] = to_numpy(sim.p)
+    if i % args.capture_every == 0:
+        frames[i // args.capture_every] = to_numpy(sim.p)
     mic.append(probe.pressure(sim, MIC))
 
 capture.save(
     OUT,
     capture.Capture(
-        frames=frames, dt=sim.dt, dx=DX, c=sim.c, channels=(mic,), overlay=overlay
+        frames=frames,
+        dt=sim.dt * args.capture_every,
+        dx=DX,
+        c=sim.c,
+        channels=(mic,),
+        overlay=overlay,
     ),
 )
 print(f"wrote {OUT}: frames {frames.shape}, peak |p| = {np.abs(frames).max():.3f} Pa")

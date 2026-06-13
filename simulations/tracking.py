@@ -11,23 +11,26 @@ import math
 
 import numpy as np
 
-from buddies import capture, probe
+from buddies import capture, probe, simargs
 from buddies.capture import Channel
 from buddies.sim import AcousticFDTD, Source, edge_sponge, timestep, to_numpy, tone
 
 SIZE = 1.0  # m
-DX = 0.01  # m
 FREQ = 15_000.0  # Hz
 MICS = 8
 ARRAY_X = 0.2  # m
 ARRAY_SPAN = (0.3, 0.7)  # m
 POSITIONS = [(0.65, 0.75), (0.75, 0.35), (0.3, 0.9)]  # last is near endfire
-HOP_STEPS = 600  # per position: max mic distance ~0.61 m = ~365 steps, plus margin
 DETECT_THRESHOLD = 0.2  # of the window's peak |p|
 OUT = "captures/tracking.npz"
 
+args = simargs.parse(__doc__, FREQ)
+DX = args.dx
+# Per position: max mic distance ~0.61 m = ~365 default steps, plus margin.
+HOP_STEPS = args.steps(600)
+
 STEPS = HOP_STEPS * len(POSITIONS)
-DT = timestep(DX)
+DT = timestep(DX, cfl=args.cfl)
 
 
 def arrival(envelope):
@@ -50,6 +53,7 @@ sim = AcousticFDTD(
     n,
     n,
     DX,
+    cfl=args.cfl,
     sources=[
         Source(pos=p, waveform=pulse(k * HOP_STEPS * DT))
         for k, p in enumerate(POSITIONS)
@@ -61,10 +65,11 @@ mic_pos = [(ARRAY_X, y) for y in np.linspace(*ARRAY_SPAN, MICS)]
 lights = [Channel(f"m{j}", kind="color", dt=sim.dt, pos=p) for j, p in enumerate(mic_pos)]
 
 recordings = np.empty((STEPS, MICS), dtype=np.float32)
-frames = np.empty((STEPS, n, n), dtype=np.float32)
+frames = np.empty((args.nframes(STEPS), n, n), dtype=np.float32)
 for i in range(STEPS):
     sim.step()
-    frames[i] = to_numpy(sim.p)
+    if i % args.capture_every == 0:
+        frames[i // args.capture_every] = to_numpy(sim.p)
     for j, p in enumerate(mic_pos):
         recordings[i, j] = probe.pressure(sim, p)
         lights[j].append(recordings[i, j])
@@ -108,7 +113,11 @@ guess.values = guess_values
 capture.save(
     OUT,
     capture.Capture(
-        frames=frames, dt=sim.dt, dx=DX, c=sim.c, channels=(guess, *lights)
+        frames=frames,
+        dt=sim.dt * args.capture_every,
+        dx=DX,
+        c=sim.c,
+        channels=(guess, *lights),
     ),
 )
 print(f"wrote {OUT}: frames {frames.shape}, peak |p| = {np.abs(frames).max():.3f} Pa")

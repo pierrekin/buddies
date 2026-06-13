@@ -8,7 +8,7 @@ import math
 
 import numpy as np
 
-from buddies import capture, probe
+from buddies import capture, probe, simargs
 from buddies.capture import Channel
 from buddies.sim import (
     AcousticFDTD,
@@ -22,17 +22,11 @@ from buddies.sim import (
 
 SIZE_X = 2.0  # m
 SIZE_Y = 1.0  # m
-DX = 0.01  # m
 FREQ = 15_000.0  # Hz
 ELEMENTS = 16
 ARRAY_X = 0.15  # m
 APERTURE = 0.3  # m
 ANGLES_DEG = range(-30, 31, 2)
-PING_STEPS = 2400  # round trip to the backstop at +-40 deg is ~2180 steps
-# Ignore the mic until the transmit has fully passed. Loudest-return
-# ranging has no reverb rejection, so this must outlast the entire
-# transmit tail even at ±40 deg steering (delay spread ~170 steps + ring).
-BLANK_STEPS = 600
 FOCUS_RANGE = 1.05  # m, sharpens the beam around the block's range
 DETECT_THRESHOLD = 0.2  # of a window's transmit peak, for the emit edge
 MIN_ECHO = 0.05  # Pa, below this a window counts as no echo
@@ -44,12 +38,20 @@ PEAK_OFFSET_S = 0.75 / FREQ
 COLOR_SPAN_DB = 30.0
 COLD = np.array((50, 50, 140, 230))  # RGBA
 HOT = np.array((255, 180, 40, 255))
-SMOOTH_STEPS = 30  # trailing-max window, half a pulse, bridges zero crossings
-CAPTURE_EVERY = 8
 OUT = "captures/sonar_sweep2.npz"
 
+args = simargs.parse(__doc__, FREQ, capture_every=8)
+DX = args.dx
+PING_STEPS = args.steps(2400)  # round trip to the backstop at +-40 deg
+# Ignore the mic until the transmit has fully passed. Loudest-return
+# ranging has no reverb rejection, so this must outlast the entire
+# transmit tail even at ±40 deg steering (delay spread ~170 steps + ring).
+BLANK_STEPS = args.steps(600)
+# Trailing-max window, half a pulse, bridges zero crossings.
+SMOOTH_STEPS = args.steps(30)
+
 STEPS = PING_STEPS * len(ANGLES_DEG)
-DT = timestep(DX)
+DT = timestep(DX, cfl=args.cfl)
 CENTER = (ARRAY_X, SIZE_Y / 2)
 
 
@@ -79,30 +81,34 @@ for k, deg in enumerate(ANGLES_DEG):
 
 rigid = np.zeros((nx, ny), dtype=bool)
 overlay = np.zeros((nx, ny, 4), dtype=np.uint8)
+def cells(lo, hi):
+    return slice(round(lo / DX), round(hi / DX))
+
+
 # 8x8 cm block in the bottom half, ~1.08 m from the array at ~-12 deg.
-block = (slice(121, 129), slice(23, 31))
+block = (cells(1.21, 1.29), cells(0.23, 0.31))
 rigid[block] = True
 overlay[block] = (140, 110, 70, 220)  # RGBA
 # 8x8 cm block in the upper half, ~0.78 m from the array at ~+11 deg.
-block2 = (slice(91, 99), slice(61, 69))
+block2 = (cells(0.91, 0.99), cells(0.61, 0.69))
 rigid[block2] = True
 overlay[block2] = (110, 140, 70, 220)
 # Full-height backstop wall, face at x = 1.55.
-backstop = (slice(155, 160), slice(0, ny))
+backstop = (cells(1.55, 1.60), slice(0, ny))
 rigid[backstop] = True
 overlay[backstop] = (80, 80, 90, 220)
 
 sim = AcousticFDTD(
-    nx, ny, DX, sources=sources, rigid=rigid, damping=edge_sponge((nx, ny), DX)
+    nx, ny, DX, cfl=args.cfl, sources=sources, rigid=rigid, damping=edge_sponge((nx, ny), DX)
 )
 
 element_y = np.linspace(CENTER[1] - APERTURE / 2, CENTER[1] + APERTURE / 2, ELEMENTS)
 recordings = np.empty((STEPS, ELEMENTS), dtype=np.float32)
-frames = np.empty((STEPS // CAPTURE_EVERY, nx, ny), dtype=np.float32)
+frames = np.empty((args.nframes(STEPS), nx, ny), dtype=np.float32)
 for i in range(STEPS):
     sim.step()
-    if i % CAPTURE_EVERY == 0:
-        frames[i // CAPTURE_EVERY] = to_numpy(sim.p)
+    if i % args.capture_every == 0:
+        frames[i // args.capture_every] = to_numpy(sim.p)
     for j, ey in enumerate(element_y):
         recordings[i, j] = probe.pressure(sim, (ARRAY_X, ey))
 
@@ -169,7 +175,7 @@ capture.save(
     OUT,
     capture.Capture(
         frames=frames,
-        dt=sim.dt * CAPTURE_EVERY,
+        dt=sim.dt * args.capture_every,
         dx=DX,
         c=sim.c,
         channels=(mic, *depth_channels),
