@@ -149,7 +149,8 @@ def run(args, out):
 
     # The beamformed trace for the strongest beam, as a sanity scope.
     best = max(results, key=lambda r: r[2])
-    mic = Channel("rx beam (Pa)", kind="scalar", dt=sim.dt, pos=CENTER)
+    # No pos: this is the whole array's formed output, not a point in the field.
+    mic = Channel("rx beam (Pa)", kind="scalar", dt=sim.dt)
     mic.values = list(beamform(best[0])[0])
 
     out.finish(

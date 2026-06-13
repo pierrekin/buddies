@@ -130,7 +130,8 @@ def run(args, out):
     ch = Channel("", kind="vector", dt=sim.dt, pos=CENTER, scale=1.0, color=(255, 180, 40, 255))
     ch.values = [vec] * steps
 
-    mic = Channel("rx beam (Pa)", kind="scalar", dt=sim.dt, pos=CENTER)
+    # No pos: this is the whole array's formed output, not a point in the field.
+    mic = Channel("rx beam (Pa)", kind="scalar", dt=sim.dt)
     mic.values = list(beamformed)
 
     out.finish(
