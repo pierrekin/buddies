@@ -1,4 +1,4 @@
-"""Sonar listen v3: multiple targets at realistic numbers, over a seabed.
+"""Sonar listen v3: multiple targets at realistic numbers, before a sea wall.
 
 v2 formed a fan from one ping against a single target. v3 keeps the
 one-ping receive-beamforming idea but moves to numbers a real high-
@@ -12,8 +12,9 @@ something to resolve:
   - Three targets: one isolated, plus a closely spaced pair ~0.3 m apart at
     ~3.5 m (~4.9 deg, just wider than the beam) to show the fan resolving
     two returns.
-  - A diffuse seabed built from the same wavelength-scale bumpy height field
-    as the sweep backstop, here laid along the bottom as a rough floor that
+  - A diffuse sea wall built from the same wavelength-scale bumpy height field
+    as the sweep backstop: a rough vertical backdrop behind the targets (a
+    forward-facing sonar looks at objects in front of a wall, not a floor) that
     scatters rather than mirrors.
 
 The beamformer and ranging are unchanged from v2; only the scene and the
@@ -58,11 +59,11 @@ COLOR_SPAN_DB = 30.0  # returns this far below the loudest fade from hot to cold
 COLD = np.array((50, 50, 140, 230))  # RGBA
 HOT = np.array((255, 180, 40, 255))
 
-# Diffuse seabed: a rough floor near the bottom, bumps ~wavelength scale so it
-# scatters rather than mirrors.
-BED_Y = 2.6  # m, mean depth of the seabed top surface
-BUMP_HEIGHT = WAVELENGTH  # m, protrusion toward the array
-BUMP_WIDTH = WAVELENGTH  # m, lateral feature size
+# Diffuse sea wall: a rough vertical backdrop behind the targets, bumps
+# ~wavelength scale so it scatters rather than mirrors.
+WALL_X = 3.8  # m, mean range of the wall's near face
+BUMP_HEIGHT = WAVELENGTH  # m, protrusion toward the array (in range)
+BUMP_WIDTH = WAVELENGTH  # m, lateral (cross-range) feature size
 
 DEFAULTS = {"capture_every": 16}
 
@@ -102,17 +103,17 @@ def run(args, out):
         rigid[mask] = True
         overlay[mask] = color
 
-    # Diffuse seabed: a wavelength-scale bumpy height field laid along the
-    # bottom, filling from its rough top surface down to the domain edge.
+    # Diffuse sea wall: a wavelength-scale bumpy height field standing in range,
+    # filling from its rough near face out to the far domain edge.
     kernel_cells = max(1, round(BUMP_WIDTH / DX))
-    noise = np.random.default_rng(7).random(nx + kernel_cells)
-    profile = np.convolve(noise, np.ones(kernel_cells) / kernel_cells, mode="valid")[:nx]
+    noise = np.random.default_rng(7).random(ny + kernel_cells)
+    profile = np.convolve(noise, np.ones(kernel_cells) / kernel_cells, mode="valid")[:ny]
     profile = (profile - profile.min()) / (profile.max() - profile.min())
     bump_cells = np.rint(profile * BUMP_HEIGHT / DX).astype(int)
-    bed_cell = round(BED_Y / DX)
-    for ix in range(nx):
-        rigid[ix, bed_cell - bump_cells[ix] : ny] = True
-        overlay[ix, bed_cell - bump_cells[ix] : ny] = (90, 80, 70, 220)
+    wall_cell = round(WALL_X / DX)
+    for iy in range(ny):
+        rigid[wall_cell - bump_cells[iy] : nx, iy] = True
+        overlay[wall_cell - bump_cells[iy] : nx, iy] = (90, 80, 70, 220)
 
     mics = receiver_array(
         (ARRAY_X, CENTER[1] - APERTURE / 2), (ARRAY_X, CENTER[1] + APERTURE / 2), ELEMENTS
