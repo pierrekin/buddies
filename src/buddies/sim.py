@@ -143,6 +143,33 @@ def receiver_array(start, end, n):
     return [Receiver(pos=pos) for pos in line(start, end, n)]
 
 
+def _product(a, b):
+    """``a * b``, treating a None factor as absent. None if both are None."""
+    if a is None:
+        return b
+    if b is None:
+        return a
+    return a * b
+
+
+def _velocity_kernels(xp):
+    """In-place velocity-update kernels ``(masked, plain)`` that read the two
+    shifted pressure faces, scale by the gradient coefficient, and (masked) by
+    the folded wall/damping factor -- each a single fused pass. None on numpy,
+    which uses the array-expression form in ``_step`` instead."""
+    if xp is numpy:
+        return None, None
+    masked = xp.ElementwiseKernel(
+        "T v, T p_hi, T p_lo, float32 cv, T m", "T out",
+        "out = (v - cv * (p_hi - p_lo)) * m", "fdtd_velocity_masked",
+    )
+    plain = xp.ElementwiseKernel(
+        "T v, T p_hi, T p_lo, float32 cv", "T out",
+        "out = v - cv * (p_hi - p_lo)", "fdtd_velocity",
+    )
+    return masked, plain
+
+
 class AcousticFDTD:
     def __init__(
         self,
@@ -163,24 +190,33 @@ class AcousticFDTD:
         self.c, self.rho = c, rho
         self.dt = timestep(dx, c, cfl)
 
-        self._open_x = self._open_y = None
+        # Fold the rigid-wall zeroing and the sponge damping into one factor per
+        # velocity face (``_mvx``/``_mvy``) and one for pressure (``_mp``), so the
+        # step multiplies once instead of once per effect. None where neither
+        # applies.
+        open_x = open_y = None
         if rigid is not None:
             rigid = xp.asarray(rigid, dtype=bool)
             if rigid.shape != (nx, ny):
                 raise ValueError(f"rigid mask shape {rigid.shape} != grid ({nx}, {ny})")
             # Zero the velocity on every face touching a rigid cell.
-            self._open_x = xp.asarray(~(rigid[1:, :] | rigid[:-1, :]), dtype=xp.float32)
-            self._open_y = xp.asarray(~(rigid[:, 1:] | rigid[:, :-1]), dtype=xp.float32)
+            open_x = xp.asarray(~(rigid[1:, :] | rigid[:-1, :]), dtype=xp.float32)
+            open_y = xp.asarray(~(rigid[:, 1:] | rigid[:, :-1]), dtype=xp.float32)
 
-        self._damp_p = self._damp_x = self._damp_y = None
+        damp_x = damp_y = None
+        self._mp = None
         if damping is not None:
             damping = xp.asarray(damping, dtype=xp.float32)
             if damping.shape != (nx, ny):
                 raise ValueError(f"damping shape {damping.shape} != grid ({nx}, {ny})")
             # Per-step amplitude factors; faces use the mean of adjacent cells.
-            self._damp_p = xp.exp(-damping * self.dt)
-            self._damp_x = xp.exp(-(damping[1:, :] + damping[:-1, :]) / 2 * self.dt)
-            self._damp_y = xp.exp(-(damping[:, 1:] + damping[:, :-1]) / 2 * self.dt)
+            self._mp = xp.exp(-damping * self.dt)
+            damp_x = xp.exp(-(damping[1:, :] + damping[:-1, :]) / 2 * self.dt)
+            damp_y = xp.exp(-(damping[:, 1:] + damping[:, :-1]) / 2 * self.dt)
+
+        self._mvx = _product(open_x, damp_x)
+        self._mvy = _product(open_y, damp_y)
+        self._vel_masked, self._vel_plain = _velocity_kernels(xp)
 
         self._sources = []
         for src in sources:
@@ -228,26 +264,33 @@ class AcousticFDTD:
 
     def _step(self):
         p, vx, vy = self.p, self.vx, self.vy
+        cv, cp = self._cv, self._cp
 
-        # rho dv/dt = -grad(p)
-        vx -= self._cv * (p[1:, :] - p[:-1, :])
-        vy -= self._cv * (p[:, 1:] - p[:, :-1])
-        if self._open_x is not None:
-            vx *= self._open_x
-            vy *= self._open_y
-        if self._damp_x is not None:
-            vx *= self._damp_x
-            vy *= self._damp_y
+        # rho dv/dt = -grad(p), with the wall/damping factor folded in. One
+        # fused pass per component on the GPU; the array form on numpy.
+        if self._vel_masked is not None:
+            if self._mvx is not None:
+                self._vel_masked(vx, p[1:, :], p[:-1, :], cv, self._mvx, vx)
+                self._vel_masked(vy, p[:, 1:], p[:, :-1], cv, self._mvy, vy)
+            else:
+                self._vel_plain(vx, p[1:, :], p[:-1, :], cv, vx)
+                self._vel_plain(vy, p[:, 1:], p[:, :-1], cv, vy)
+        else:
+            vx -= cv * (p[1:, :] - p[:-1, :])
+            vy -= cv * (p[:, 1:] - p[:, :-1])
+            if self._mvx is not None:
+                vx *= self._mvx
+                vy *= self._mvy
 
-        # dp/dt = -rho c^2 div(v); faces outside the grid are rigid walls (v = 0)
-        div = self.xp.zeros_like(p)
-        div[:-1, :] += vx
-        div[1:, :] -= vx
-        div[:, :-1] += vy
-        div[:, 1:] -= vy
-        p -= self._cp * div
-        if self._damp_p is not None:
-            p *= self._damp_p
+        # dp/dt = -rho c^2 div(v): accumulate the divergence straight into p
+        # (faces outside the grid are rigid walls, v = 0), no full-grid buffer.
+        cvx, cvy = cp * vx, cp * vy
+        p[:-1, :] -= cvx
+        p[1:, :] += cvx
+        p[:, :-1] -= cvy
+        p[:, 1:] += cvy
+        if self._mp is not None:
+            p *= self._mp
 
         t = self._step_count * self.dt
         if self._waveforms:
