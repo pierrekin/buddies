@@ -22,10 +22,15 @@ def pulse(t):
     return _tone(t) if t < 1 / FREQ else 0.0
 
 
+SLAB_COLOR = (140, 110, 70, 220)  # RGBA
+
 n = round(SIZE / DX)
 rigid = np.zeros((n, n), dtype=bool)
+overlay = np.zeros((n, n, 4), dtype=np.uint8)
 # Vertical slab from (0.70, 0.20) to (0.75, 0.80).
-rigid[round(0.70 / DX) : round(0.75 / DX), round(0.20 / DX) : round(0.80 / DX)] = True
+slab = (slice(round(0.70 / DX), round(0.75 / DX)), slice(round(0.20 / DX), round(0.80 / DX)))
+rigid[slab] = True
+overlay[slab] = SLAB_COLOR
 
 sim = AcousticFDTD(
     n,
@@ -44,6 +49,9 @@ for i in range(STEPS):
     mic.append(probe.pressure(sim, MIC))
 
 capture.save(
-    OUT, capture.Capture(frames=frames, dt=sim.dt, dx=DX, c=sim.c, channels=(mic,))
+    OUT,
+    capture.Capture(
+        frames=frames, dt=sim.dt, dx=DX, c=sim.c, channels=(mic,), overlay=overlay
+    ),
 )
 print(f"wrote {OUT}: frames {frames.shape}, peak |p| = {np.abs(frames).max():.3f} Pa")

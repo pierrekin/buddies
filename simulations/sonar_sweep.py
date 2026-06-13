@@ -1,8 +1,8 @@
 """A swept-beam active sonar: the array fires one beamformed ping per
-angle, listens for the first echo at its center after transmit blanking,
-and converts the time of flight into a range. Each angle's result is a
-true-scale vector channel, so the arrow tips should land on the rigid
-obstacles in the tank."""
+angle, beamforms the same angle on receive (delay-and-sum of all element
+recordings, squaring the sidelobe suppression), and converts the first
+echo's time of flight into a range. Each angle's result is a true-scale
+vector channel, so the arrow tip should land on the rigid block."""
 
 import math
 
@@ -20,30 +20,33 @@ from buddies.sim import (
     tone,
 )
 
-SIZE = 1.0  # m
+SIZE_X = 2.0  # m
+SIZE_Y = 1.0  # m
 DX = 0.01  # m
 FREQ = 15_000.0  # Hz
 ELEMENTS = 16
 ARRAY_X = 0.15  # m
 APERTURE = 0.3  # m
-ANGLES_DEG = range(-40, 41, 10)
-PING_STEPS = 700  # round trip to the farthest obstacle is ~550 steps
+ANGLES_DEG = range(-40, 41, 2)
+PING_STEPS = 1500  # round trip to the block is ~1270 steps
 # Ignore the mic until the transmit has fully passed. At ±40 deg steering
 # the element delay spread stretches the transmit to ~170 steps plus ring.
 BLANK_STEPS = 320
-FOCUS_RANGE = 0.45  # m, sharpens the beam around the obstacle ranges
+FOCUS_RANGE = 1.05  # m, sharpens the beam around the block's range
 DETECT_THRESHOLD = 0.2  # of a window's transmit peak, for the emit edge
 # An echo is a rise of the smoothed envelope above its running minimum:
 # the transmit reverb only ever decays, so a rise means a reflection.
 RISE_FACTOR = 2.5
-MIN_ECHO = 0.1  # Pa, ignore rises in the quiet tail
+# Pa; sits between real returns (>= ~0.7 beamformed) and the two-way
+# sidelobe clutter from off-beam objects (<= ~0.3).
+MIN_ECHO = 0.5
 SMOOTH_STEPS = 30  # trailing-max window, half a pulse, bridges zero crossings
 CAPTURE_EVERY = 4
 OUT = "captures/sonar_sweep.npz"
 
 STEPS = PING_STEPS * len(ANGLES_DEG)
 DT = timestep(DX)
-CENTER = (ARRAY_X, 0.5)
+CENTER = (ARRAY_X, SIZE_Y / 2)
 
 
 def ping_waveform(ping_start):
@@ -58,38 +61,59 @@ def ping_waveform(ping_start):
     return factory
 
 
-n = round(SIZE / DX)
+nx, ny = round(SIZE_X / DX), round(SIZE_Y / DX)
 sources = []
 for k, deg in enumerate(ANGLES_DEG):
     a = math.radians(deg)
     sources += array(
-        start=(ARRAY_X, 0.5 - APERTURE / 2),
-        end=(ARRAY_X, 0.5 + APERTURE / 2),
+        start=(ARRAY_X, CENTER[1] - APERTURE / 2),
+        end=(ARRAY_X, CENTER[1] + APERTURE / 2),
         n=ELEMENTS,
         focus=(CENTER[0] + FOCUS_RANGE * math.cos(a), CENTER[1] + FOCUS_RANGE * math.sin(a)),
         waveform=ping_waveform(k * PING_STEPS * DT),
     )
 
-rigid = np.zeros((n, n), dtype=bool)
-rigid[45:53, 66:74] = True  # block A: ~0.35 m from the array at ~+30 deg
-rigid[58:68, 34:40] = True  # block B: ~0.46 m at ~-20 deg
+rigid = np.zeros((nx, ny), dtype=bool)
+overlay = np.zeros((nx, ny, 4), dtype=np.uint8)
+# 12x12 cm block in the bottom half, ~1.06 m from the array at ~-14 deg.
+block = (slice(119, 131), slice(17, 29))
+rigid[block] = True
+overlay[block] = (140, 110, 70, 220)  # RGBA
 
-sim = AcousticFDTD(n, n, DX, sources=sources, rigid=rigid, damping=edge_sponge((n, n), DX))
+sim = AcousticFDTD(
+    nx, ny, DX, sources=sources, rigid=rigid, damping=edge_sponge((nx, ny), DX)
+)
 
-mic = Channel("mic (Pa)", kind="scalar", dt=sim.dt, pos=CENTER)
-frames = np.empty((STEPS // CAPTURE_EVERY, n, n), dtype=np.float32)
+element_y = np.linspace(CENTER[1] - APERTURE / 2, CENTER[1] + APERTURE / 2, ELEMENTS)
+recordings = np.empty((STEPS, ELEMENTS), dtype=np.float32)
+frames = np.empty((STEPS // CAPTURE_EVERY, nx, ny), dtype=np.float32)
 for i in range(STEPS):
     sim.step()
     if i % CAPTURE_EVERY == 0:
         frames[i // CAPTURE_EVERY] = to_numpy(sim.p)
-    mic.append(probe.pressure(sim, CENTER))
+    for j, ey in enumerate(element_y):
+        recordings[i, j] = probe.pressure(sim, (ARRAY_X, ey))
 
-# Per ping: leading edge of the transmit, then the first echo after
-# blanking. Range = c * time difference / 2.
-recording = np.abs(np.asarray(mic.values))
+# Per ping: delay-and-sum the element recordings with the ping's own
+# delays, find the transmit's leading edge and the first echo after
+# blanking, then range = c * time difference / 2 minus the alignment
+# offset (echoes aligned this way arrive (dmax - FOCUS_RANGE)/c late).
+rx = np.empty(STEPS, dtype=np.float32)
 depth_channels = []
 for k, deg in enumerate(ANGLES_DEG):
-    window = recording[k * PING_STEPS : (k + 1) * PING_STEPS]
+    a = math.radians(deg)
+    focus = (CENTER[0] + FOCUS_RANGE * math.cos(a), CENTER[1] + FOCUS_RANGE * math.sin(a))
+    dists = np.hypot(ARRAY_X - focus[0], element_y - focus[1])
+    shifts = np.round((dists.max() - dists) / sim.c / sim.dt).astype(int)
+
+    win = recordings[k * PING_STEPS : (k + 1) * PING_STEPS]
+    beamformed = np.zeros(PING_STEPS, dtype=np.float32)
+    for j, s in enumerate(shifts):
+        beamformed[s:] += win[: PING_STEPS - s, j]
+    beamformed /= ELEMENTS
+    rx[k * PING_STEPS : (k + 1) * PING_STEPS] = beamformed
+
+    window = np.abs(beamformed)
     emit = int(np.argmax(window > DETECT_THRESHOLD * window[:BLANK_STEPS].max()))
     env = np.array(
         [window[max(0, i - SMOOTH_STEPS) : i + 1].max() for i in range(len(window))]
@@ -103,7 +127,9 @@ for k, deg in enumerate(ANGLES_DEG):
         dist = None
         values = [(0.0, 0.0)] * STEPS
     else:
-        dist = sim.c * (BLANK_STEPS + echo_rel - emit) * sim.dt / 2
+        dist = sim.c * (BLANK_STEPS + echo_rel - emit) * sim.dt / 2 - (
+            dists.max() - FOCUS_RANGE
+        )
         ready = (k + 1) * PING_STEPS
         vec = (dist * math.cos(a), dist * math.sin(a))
         values = [(0.0, 0.0)] * ready + [vec] * (STEPS - ready)
@@ -113,6 +139,9 @@ for k, deg in enumerate(ANGLES_DEG):
     ch.values = values
     depth_channels.append(ch)
 
+mic = Channel("rx beam (Pa)", kind="scalar", dt=sim.dt, pos=CENTER)
+mic.values = list(rx)
+
 capture.save(
     OUT,
     capture.Capture(
@@ -121,6 +150,7 @@ capture.save(
         dx=DX,
         c=sim.c,
         channels=(mic, *depth_channels),
+        overlay=overlay,
     ),
 )
 print(f"wrote {OUT}: frames {frames.shape}, peak |p| = {np.abs(frames).max():.3f} Pa")

@@ -37,10 +37,20 @@ class Capture:
     dx: float  # cell size (m)
     c: float  # sound speed (m/s)
     channels: tuple = ()
+    # Optional (nx, ny, 4) RGBA uint8 image drawn over the field, e.g. to
+    # color rigid regions. Alpha 0 where the field should show through.
+    overlay: np.ndarray | None = None
 
 
 def save(path, cap):
-    arrays = {"frames": cap.frames, "dt": cap.dt, "dx": cap.dx, "c": cap.c}
+    arrays = {
+        "frames": cap.frames,
+        "dt": cap.dt,
+        "dx": cap.dx,
+        "c": cap.c,
+        # npz cannot hold None; an empty array means no overlay.
+        "overlay": cap.overlay if cap.overlay is not None else np.zeros(0, dtype=np.uint8),
+    }
     meta = []
     for i, ch in enumerate(cap.channels):
         meta.append(
@@ -67,10 +77,12 @@ def load(path):
             )
             for i, m in enumerate(json.loads(data["channels"].item()))
         )
+        overlay = data["overlay"]
         return Capture(
             frames=data["frames"],
             dt=float(data["dt"]),
             dx=float(data["dx"]),
             c=float(data["c"]),
             channels=channels,
+            overlay=overlay if overlay.size else None,
         )

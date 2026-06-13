@@ -100,6 +100,11 @@ class Viewer(QtWidgets.QWidget):
         self.img.setRect(QtCore.QRectF(0, 0, *self.domain))
         plot.addItem(self.img)
 
+        if self.cap.overlay is not None:
+            overlay = pg.ImageItem(self.cap.overlay)
+            overlay.setRect(QtCore.QRectF(0, 0, *self.domain))
+            plot.addItem(overlay)
+
     def _label(self, ch):
         if not ch.name:
             return
