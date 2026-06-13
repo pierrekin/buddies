@@ -15,9 +15,16 @@ every quantity is identical to the constants as written.
 import argparse
 from dataclasses import dataclass
 
+from tqdm import tqdm
+
 from buddies.sim import CFL_SAFETY_FACTOR, SOUND_SPEED_SEAWATER, timestep
 
 DEFAULT_RESOLUTION = 10.0  # cells per wavelength
+
+
+def progress(steps):
+    """``range(steps)`` wrapped in a progress bar (percentage, rate, ETA)."""
+    return tqdm(range(steps), unit="step")
 
 
 @dataclass(frozen=True)

@@ -35,7 +35,7 @@ tint = Channel("tint", kind="color", dt=sim.dt, pos=TINT)
 energy = Channel("field energy (J/m)", kind="scalar", dt=sim.dt)
 
 frames = np.empty((args.nframes(STEPS), n, n), dtype=np.float32)
-for i in range(STEPS):
+for i in simargs.progress(STEPS):
     sim.step()
     if i % args.capture_every == 0:
         frames[i // args.capture_every] = to_numpy(sim.p)

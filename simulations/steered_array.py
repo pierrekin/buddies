@@ -50,7 +50,7 @@ sim = AcousticFDTD(
 print(f"grid {n}x{n}, dt={sim.dt * 1e9:.1f} ns, {STEPS} steps = {STEPS * sim.dt * 1e6:.0f} us")
 frames = np.empty((args.nframes(STEPS), n, n), dtype=np.float32)
 t0 = time.perf_counter()
-for i in range(STEPS):
+for i in simargs.progress(STEPS):
     sim.step()
     if i % args.capture_every == 0:
         frames[i // args.capture_every] = to_numpy(sim.p)

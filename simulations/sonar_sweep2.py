@@ -105,7 +105,7 @@ sim = AcousticFDTD(
 element_y = np.linspace(CENTER[1] - APERTURE / 2, CENTER[1] + APERTURE / 2, ELEMENTS)
 recordings = np.empty((STEPS, ELEMENTS), dtype=np.float32)
 frames = np.empty((args.nframes(STEPS), nx, ny), dtype=np.float32)
-for i in range(STEPS):
+for i in simargs.progress(STEPS):
     sim.step()
     if i % args.capture_every == 0:
         frames[i // args.capture_every] = to_numpy(sim.p)

@@ -45,7 +45,7 @@ sim = AcousticFDTD(
 
 mic = Channel("mic (Pa)", kind="scalar", dt=sim.dt, pos=MIC)
 frames = np.empty((args.nframes(STEPS), n, n), dtype=np.float32)
-for i in range(STEPS):
+for i in simargs.progress(STEPS):
     sim.step()
     if i % args.capture_every == 0:
         frames[i // args.capture_every] = to_numpy(sim.p)

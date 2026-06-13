@@ -8,6 +8,7 @@ dependencies = [
     "numpy>=2.4.6",
     "pyqtgraph>=0.14.0",
     "pyside6>=6.11.1",
+    "tqdm>=4.68.2",
 ]
 
 [project.scripts]
