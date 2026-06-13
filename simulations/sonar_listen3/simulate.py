@@ -128,7 +128,7 @@ def run(args, out):
 
     # Step counts from physical path lengths: cover the two-way trip across the
     # domain, blank past the direct blast, smooth over half a pulse.
-    steps = round(2.3 * SIZE_X / sim.c / sim.dt)
+    steps = args.capped(round(2.3 * SIZE_X / sim.c / sim.dt))
     blank_steps = round(1.5 / sim.c / sim.dt)
     smooth_steps = max(1, round(0.5 / FREQ / sim.dt))
 
@@ -158,7 +158,7 @@ def run(args, out):
         emit = int(np.argmax(window > DETECT_THRESHOLD * window[:blank_steps].max()))
         env = np.array([window[max(0, i - smooth_steps) : i + 1].max() for i in range(len(window))])
         listen = env[blank_steps:]
-        loudness = float(listen.max())
+        loudness = float(listen.max()) if listen.size else 0.0
         if loudness < MIN_ECHO:
             results.append((deg, None, loudness, 0))
         else:

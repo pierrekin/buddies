@@ -170,6 +170,36 @@ def _velocity_kernels(xp):
     return masked, plain
 
 
+def _pressure_kernel(xp):
+    """In-place pressure update fused into one stencil pass: subtract the
+    velocity divergence and apply the damping factor in a single sweep over the
+    grid, reading the four neighbouring velocity faces by flat index so there is
+    no divergence buffer. None on numpy.
+
+    The source is cupy's CUDA-C dialect, which cupy compiles for whichever GPU
+    backend it targets -- NVIDIA CUDA or AMD ROCm/HIP -- so it is portable as
+    long as it stays plain C. Assumes the C-contiguous grid layout the sim
+    allocates: cell ``(row, col)`` is flat index ``i = row * ny + col``, ``vx``
+    is ``(nx-1, ny)`` and ``vy`` is ``(nx, ny-1)``, both row-major."""
+    if xp is numpy:
+        return None
+    return xp.ElementwiseKernel(
+        "T p_in, T mp, raw T vx, raw T vy, float32 cp, int32 nx, int32 ny",
+        "T p_out",
+        """
+        const int row = i / ny;
+        const int col = i % ny;
+        T div = 0;
+        if (row < nx - 1) div += vx[i];          // lower x-face vx[row, col]
+        if (row > 0)      div -= vx[i - ny];      // upper x-face vx[row-1, col]
+        if (col < ny - 1) div += vy[i - row];     // right y-face vy[row, col]
+        if (col > 0)      div -= vy[i - row - 1];  // left  y-face vy[row, col-1]
+        p_out = (p_in - cp * div) * mp;
+        """,
+        "fdtd_pressure",
+    )
+
+
 class AcousticFDTD:
     def __init__(
         self,
@@ -217,6 +247,7 @@ class AcousticFDTD:
         self._mvx = _product(open_x, damp_x)
         self._mvy = _product(open_y, damp_y)
         self._vel_masked, self._vel_plain = _velocity_kernels(xp)
+        self._pressure = _pressure_kernel(xp)
 
         self._sources = []
         for src in sources:
@@ -282,15 +313,19 @@ class AcousticFDTD:
                 vx *= self._mvx
                 vy *= self._mvy
 
-        # dp/dt = -rho c^2 div(v): accumulate the divergence straight into p
-        # (faces outside the grid are rigid walls, v = 0), no full-grid buffer.
-        cvx, cvy = cp * vx, cp * vy
-        p[:-1, :] -= cvx
-        p[1:, :] += cvx
-        p[:, :-1] -= cvy
-        p[:, 1:] += cvy
-        if self._mp is not None:
-            p *= self._mp
+        # dp/dt = -rho c^2 div(v); faces outside the grid are rigid walls (v = 0).
+        if self._pressure is not None and self._mp is not None:
+            # One fused stencil pass over the grid, no divergence buffer.
+            self._pressure(p, self._mp, vx, vy, cp, self.nx, self.ny, p)
+        else:
+            # Accumulate the divergence straight into p without a buffer.
+            cvx, cvy = cp * vx, cp * vy
+            p[:-1, :] -= cvx
+            p[1:, :] += cvx
+            p[:, :-1] -= cvy
+            p[:, 1:] += cvy
+            if self._mp is not None:
+                p *= self._mp
 
         t = self._step_count * self.dt
         if self._waveforms:

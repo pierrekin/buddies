@@ -46,11 +46,18 @@ class Args:
     dt: float  # s, from dx and cfl
     default_dt: float  # s, dt at the simulation's default knobs
     xp: object  # the array module: numpy (CPU) or cupy (GPU)
+    max_steps: int | None = None  # cap from --duration, or None for the full run
 
     def steps(self, n):
         """Rescale a step count written for the default knobs so it spans the
         same simulated time at the current ones."""
         return round(n * self.default_dt / self.dt)
+
+    def capped(self, steps):
+        """Truncate a step count to ``--duration`` if it was given. Sims pass
+        their full step count through this before sizing buffers, so a capped
+        run still produces a valid, shorter capture."""
+        return min(steps, self.max_steps) if self.max_steps is not None else steps
 
     def nframes(self, steps):
         """How many frames a run of ``steps`` captures at this stride."""
@@ -69,6 +76,7 @@ def add_sim_args(ap, resolution=DEFAULT_RESOLUTION, cfl=CFL_SAFETY_FACTOR, captu
     ap.add_argument("--cfl", type=float, default=cfl, help="fraction of the CFL stability limit")
     ap.add_argument("--capture-every", type=int, default=capture_every, help="record every Nth step")
     ap.add_argument("--gpu", action="store_true", help="run on the GPU via cupy")
+    ap.add_argument("--duration", type=float, default=None, help="cap the simulated time in seconds (truncates the run)")
     # Stash the baseline so ``default_dt`` (and thus step rescaling) stays tied
     # to the simulation's defaults rather than any command-line overrides.
     ap.set_defaults(_baseline_resolution=resolution, _baseline_cfl=cfl)
@@ -79,14 +87,16 @@ def sim_args(ns, freq, c=SOUND_SPEED_SEAWATER):
     frequency."""
     dx = c / freq / ns.resolution
     default_dx = c / freq / ns._baseline_resolution
+    dt = timestep(dx, c, ns.cfl)
     return Args(
         resolution=ns.resolution,
         cfl=ns.cfl,
         capture_every=ns.capture_every,
         dx=dx,
-        dt=timestep(dx, c, ns.cfl),
+        dt=dt,
         default_dt=timestep(default_dx, c, ns._baseline_cfl),
         xp=get_backend("cupy" if ns.gpu else "numpy"),
+        max_steps=round(ns.duration / dt) if ns.duration else None,
     )
 
 

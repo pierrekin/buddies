@@ -33,7 +33,7 @@ from buddies import profiling, simargs, store
 ROOT = "output"
 SIMS_DIR = "simulations"
 DEFAULT_NAME = "default"
-SIM_SIG_KEYS = ("resolution", "cfl", "capture_every")
+SIM_SIG_KEYS = ("resolution", "cfl", "capture_every", "max_steps")
 
 
 def sim_path(sim, run):

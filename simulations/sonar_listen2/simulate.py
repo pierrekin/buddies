@@ -41,7 +41,7 @@ CENTER = (ARRAY_X, SIZE_Y / 2)
 
 def run(args, out):
     DX = args.dx
-    steps = args.steps(2000)  # one ping: round trip to a ~1 m target plus listen
+    steps = args.capped(args.steps(2000))  # one ping: round trip plus listen
     # Ignore the mic until the direct blast has passed. No reverb rejection, so
     # this must outlast the omni pulse and its ring-down but clear a ~1 m echo.
     blank_steps = args.steps(600)
@@ -115,7 +115,7 @@ def run(args, out):
         emit = int(np.argmax(window > DETECT_THRESHOLD * window[:blank_steps].max()))
         env = np.array([window[max(0, i - smooth_steps) : i + 1].max() for i in range(len(window))])
         listen = env[blank_steps:]
-        loudness = float(listen.max())
+        loudness = float(listen.max()) if listen.size else 0.0
         if loudness < MIN_ECHO:
             results.append((deg, None, loudness, 0))
         else:
