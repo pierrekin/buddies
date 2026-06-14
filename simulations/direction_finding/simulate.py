@@ -47,7 +47,8 @@ def run(args, out):
     mic_ix = args.xp.asarray([round(px / DX) for px, _ in mic_pos])
     mic_iy = args.xp.asarray([round(py / DX) for _, py in mic_pos])
     recordings_dev = args.xp.empty((steps, MICS), dtype=np.float32)
-    frames = out.open((args.nframes(steps), n, n))
+    shot = out.shot("main")
+    frames = shot.open((args.nframes(steps), n, n))
     for i in simargs.progress(steps):
         sim.step()
         if i % args.capture_every == 0:
@@ -93,8 +94,7 @@ def run(args, out):
     guess = Channel("bearing", kind="vector", dt=sim.dt, pos=center)
     guess.values = [(0.0, 0.0)] * ready + [direction] * (steps - ready)
 
-    out.finish(
-        dt=sim.dt * args.capture_every, dx=DX, c=sim.c,
+    shot.finish(
         channels=(guess, *lights),
         extras={
             "true_source": list(SOURCE),
@@ -105,3 +105,4 @@ def run(args, out):
             "arrival_steps": arrival_steps.astype(np.int32),
         },
     )
+    out.finish(dt=sim.dt * args.capture_every, dx=DX, c=sim.c)

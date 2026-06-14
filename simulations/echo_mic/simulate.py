@@ -39,11 +39,13 @@ def run(args, out):
     )
 
     mic = Channel("mic (Pa)", kind="scalar", dt=sim.dt, pos=MIC)
-    frames = out.open((args.nframes(steps), n, n))
+    shot = out.shot("main")
+    frames = shot.open((args.nframes(steps), n, n))
     for i in simargs.progress(steps):
         sim.step()
         if i % args.capture_every == 0:
             frames[i // args.capture_every] = to_numpy(sim.p)
         mic.append(probe.pressure(sim, MIC))
 
-    out.finish(dt=sim.dt * args.capture_every, dx=DX, c=sim.c, channels=(mic,), overlay=overlay)
+    shot.finish(channels=(mic,), overlay=overlay)
+    out.finish(dt=sim.dt * args.capture_every, dx=DX, c=sim.c)

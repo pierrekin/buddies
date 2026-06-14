@@ -10,7 +10,7 @@ import pyqtgraph as pg
 
 
 def extra_views(viewer, layout, start_row):
-    extras = viewer.st.extras
+    extras = viewer.shot.extras
     energy = extras.get("energy_map")
     angles = extras.get("angles_deg")
     ranges = extras.get("range_bins_m")

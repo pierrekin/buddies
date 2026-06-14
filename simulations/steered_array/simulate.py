@@ -43,7 +43,8 @@ def run(args, out):
     )
 
     print(f"grid {n}x{n}, dt={sim.dt * 1e9:.1f} ns, {steps} steps = {steps * sim.dt * 1e6:.0f} us")
-    frames = out.open((args.nframes(steps), n, n))
+    shot = out.shot("main")
+    frames = shot.open((args.nframes(steps), n, n))
     t0 = time.perf_counter()
     for i in simargs.progress(steps):
         sim.step()
@@ -52,4 +53,5 @@ def run(args, out):
     elapsed = time.perf_counter() - t0
     print(f"{elapsed:.1f} s ({steps / elapsed:.0f} steps/s)")
 
+    shot.finish()
     out.finish(dt=sim.dt * args.capture_every, dx=DX, c=sim.c)

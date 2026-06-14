@@ -9,7 +9,7 @@ import pyqtgraph as pg
 
 
 def extra_views(viewer, layout, start_row):
-    extras = viewer.st.extras
+    extras = viewer.shot.extras
     freqs = extras.get("spectrum_freqs")
     mag = extras.get("spectrum_mag")
     if freqs is None or mag is None:

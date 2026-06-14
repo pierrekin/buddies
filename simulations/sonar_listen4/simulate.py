@@ -131,7 +131,8 @@ def run(args, out):
     smooth_steps = max(1, round(0.5 / FREQ / sim.dt))
 
     recordings_dev = args.xp.empty((steps, ELEMENTS), dtype=np.float32)
-    frames = out.open((args.nframes(steps), nx, ny))
+    shot = out.shot("main")
+    frames = shot.open((args.nframes(steps), nx, ny))
     for i in simargs.progress(steps):
         sim.step()
         if i % args.capture_every == 0:
@@ -189,8 +190,8 @@ def run(args, out):
     mic = Channel("rx beam (Pa)", kind="scalar", dt=sim.dt)
     mic.values = list(beamform(list(ANGLES_DEG)[best])[0])
 
-    out.finish(
-        dt=sim.dt * args.capture_every, dx=DX, c=sim.c, channels=(mic,), overlay=overlay,
+    shot.finish(
+        channels=(mic,), overlay=overlay,
         extras={
             "detections": detections,
             "angles_deg": np.array(list(ANGLES_DEG), dtype=np.float32),
@@ -199,6 +200,7 @@ def run(args, out):
             "color_span_db": COLOR_SPAN_DB,
         },
     )
+    out.finish(dt=sim.dt * args.capture_every, dx=DX, c=sim.c)
 
 
 def _heatmap(X, Y, energy, r_axis):

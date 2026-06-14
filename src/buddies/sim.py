@@ -298,6 +298,17 @@ class AcousticFDTD:
         else:
             self._step()
 
+    def reset(self):
+        """Wipe field state back to silence: zero p, vx, vy, restart the step
+        counter. Masks, source positions, and source waveforms are untouched,
+        so the same physical setup can be re-driven for another shot."""
+        self.p.fill(0)
+        self.vx.fill(0)
+        self.vy.fill(0)
+        self._step_count = 0
+        if self._boundary is not None and hasattr(self._boundary, "reset"):
+            self._boundary.reset()
+
     def _step(self):
         p, vx, vy = self.p, self.vx, self.vy
         cv, cp = self._cv, self._cp

@@ -87,6 +87,13 @@ class CPML:
         self._psi_vx = xp.zeros((nx, ny), dtype=xp.float32)      # d vx / dx (p update)
         self._psi_vy = xp.zeros((nx, ny), dtype=xp.float32)      # d vy / dy (p update)
 
+    def reset(self):
+        """Zero the memory accumulators so the boundary is silent again."""
+        self._psi_px.fill(0)
+        self._psi_py.fill(0)
+        self._psi_vx.fill(0)
+        self._psi_vy.fill(0)
+
     def apply_velocity(self, sim):
         """Correct the velocity faces after the un-stretched velocity update."""
         p, cv = sim.p, sim._cv

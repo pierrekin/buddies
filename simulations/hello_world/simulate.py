@@ -15,10 +15,12 @@ def run(args, out):
         sources=[Source(pos=(SIZE / 2, SIZE / 2), waveform=tone(FREQ))],
     )
 
-    frames = out.open((args.nframes(steps), n, n))
+    shot = out.shot("main")
+    frames = shot.open((args.nframes(steps), n, n))
     for i in simargs.progress(steps):
         sim.step()
         if i % args.capture_every == 0:
             frames[i // args.capture_every] = to_numpy(sim.p)
 
+    shot.finish()
     out.finish(dt=sim.dt * args.capture_every, dx=args.dx, c=sim.c)

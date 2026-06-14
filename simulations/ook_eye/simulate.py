@@ -103,7 +103,8 @@ def run(args, out):
 
     mic = Channel("mic (Pa)", kind="scalar", dt=sim.dt, pos=RX)
 
-    frames = out.open((args.nframes(steps), n, n))
+    shot = out.shot("main")
+    frames = shot.open((args.nframes(steps), n, n))
     for i in simargs.progress(steps):
         sim.step()
         if i % args.capture_every == 0:
@@ -119,8 +120,7 @@ def run(args, out):
     print(f"per-bit RMS (Pa): {[round(float(r), 4) for r in rms]}")
     print(f"threshold (Pa):   {threshold:.4f}")
 
-    out.finish(
-        dt=sim.dt * args.capture_every, dx=DX, c=sim.c,
+    shot.finish(
         channels=(mic,),
         extras={
             "bit_duration": BIT_DURATION,
@@ -131,3 +131,4 @@ def run(args, out):
             "slicer_threshold": float(threshold),
         },
     )
+    out.finish(dt=sim.dt * args.capture_every, dx=DX, c=sim.c)

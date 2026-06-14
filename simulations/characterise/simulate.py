@@ -83,7 +83,8 @@ def run(args, out):
     tx = Channel("TX waveform (m²/s)", kind="scalar", dt=sim.dt, pos=TX)
     mic = Channel("mic (Pa)", kind="scalar", dt=sim.dt, pos=RX)
 
-    frames = out.open((args.nframes(steps), n, n))
+    shot = out.shot("main")
+    frames = shot.open((args.nframes(steps), n, n))
     for i in simargs.progress(steps):
         sim.step()
         if i % args.capture_every == 0:
@@ -115,8 +116,7 @@ def run(args, out):
     print(f"measured peak Pa   : {peak_pa:.4f}")
     print(f"spectral peak freq : {freqs[spec_peak]:.0f} Hz (probed centre {FREQ:.0f} Hz)")
 
-    out.finish(
-        dt=sim.dt * args.capture_every, dx=DX, c=sim.c,
+    shot.finish(
         channels=(tx, mic, envelope),
         extras={
             "distance": float(distance),
@@ -129,3 +129,4 @@ def run(args, out):
             "spectrum_mag": spec.astype(np.float32),
         },
     )
+    out.finish(dt=sim.dt * args.capture_every, dx=DX, c=sim.c)

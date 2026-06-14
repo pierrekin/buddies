@@ -59,7 +59,8 @@ def run(args, out):
     lights = [Channel(f"m{j}", kind="color", dt=sim.dt, pos=p) for j, p in enumerate(mic_pos)]
 
     recordings = np.empty((steps, MICS), dtype=np.float32)
-    frames = out.open((args.nframes(steps), n, n))
+    shot = out.shot("main")
+    frames = shot.open((args.nframes(steps), n, n))
     for i in simargs.progress(steps):
         sim.step()
         if i % args.capture_every == 0:
@@ -113,8 +114,8 @@ def run(args, out):
     guess = Channel("bearing", kind="vector", dt=sim.dt, pos=center)
     guess.values = guess_values
 
-    out.finish(
-        dt=sim.dt * args.capture_every, dx=DX, c=sim.c,
+    shot.finish(
         channels=(guess, *lights),
         extras={"hops": hops},
     )
+    out.finish(dt=sim.dt * args.capture_every, dx=DX, c=sim.c)

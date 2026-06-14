@@ -93,7 +93,8 @@ def run(args, out):
     )
 
     recordings_dev = args.xp.empty((steps, ELEMENTS), dtype=np.float32)
-    frames = out.open((args.nframes(steps), nx, ny))
+    shot = out.shot("main")
+    frames = shot.open((args.nframes(steps), nx, ny))
     for i in simargs.progress(steps):
         sim.step()
         if i % args.capture_every == 0:
@@ -164,11 +165,9 @@ def run(args, out):
     mic = Channel("rx beam (Pa)", kind="scalar", dt=sim.dt, pos=CENTER)
     mic.values = list(rx)
 
-    out.finish(
-        dt=sim.dt * args.capture_every,
-        dx=dx,
-        c=sim.c,
+    shot.finish(
         channels=(mic, *depth_channels),
         overlay=overlay,
         extras={"detections": detections},
     )
+    out.finish(dt=sim.dt * args.capture_every, dx=dx, c=sim.c)

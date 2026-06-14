@@ -1,8 +1,9 @@
-"""Viewer for processed artifacts: animated pressure field with channel
-overlays (vector arrows, color markers) and synced scalar plots.
+"""Viewer for processed artifacts: animated pressure field per shot, with
+channel overlays and synced scalar plots.
 
-Frames are uint8 normalized to the level baked in at process time, so the
-field maps straight through the colormap with no per-open level scan."""
+The viewer opens one shot at a time; a combobox switches between them.
+Each shot owns its own frames trajectory, channels, overlay, and extras
+view, so switching rebuilds the layout from scratch."""
 
 import signal
 
@@ -45,8 +46,6 @@ class FineSlider(QtWidgets.QSlider):
         self._last_x = 0.0
 
     def mousePressEvent(self, ev):
-        # Let the base class snap to the click and emit sliderPressed, then
-        # anchor the relative accumulator at that position.
         super().mousePressEvent(ev)
         if ev.button() == QtCore.Qt.MouseButton.LeftButton:
             self._float_val = float(self.value())
@@ -59,7 +58,6 @@ class FineSlider(QtWidgets.QSlider):
         pos = ev.position()
         dx = pos.x() - self._last_x
         self._last_x = pos.x()
-        # Distance of the cursor above or below the slider's own height.
         dy = max(0.0, -pos.y(), pos.y() - self.height())
         factor = FINE_SCRUB_FALLOFF / (FINE_SCRUB_FALLOFF + dy)
         span = self.maximum() - self.minimum()
@@ -73,48 +71,39 @@ class Viewer(QtWidgets.QWidget):
     def __init__(self, title, st, fps, extra_views=None):
         super().__init__()
         self.st = st
-        self.frames = st.frames
-        self.nframes = len(st.frames)
+        self.title = title
+        self.extra_views = extra_views
         self.dt = st.dt
-        self._frame_hooks = []  # called with the current time on frame change
-
-        self.setWindowTitle(
-            f"{title} | {self.nframes} frames | "
-            f"{st.frames.shape[1]}x{st.frames.shape[2]} cells | "
-            f"{len(st.channels)} channels"
-        )
         self.resize(*WINDOW_SIZE)
 
-        glw = pg.GraphicsLayoutWidget()
-        self._build_field_view(glw)
-        plot_row = 1
-        for ch in st.channels:
-            if len(ch.values) == 0:
-                print(f"warning: channel {ch.name!r} is empty, skipping")
-                continue
-            if ch.kind == "scalar":
-                self._add_scalar(glw, plot_row, ch)
-                plot_row += 1
-            elif ch.kind == "vector":
-                self._add_vector(ch)
-            elif ch.kind == "color":
-                self._add_color(ch)
-            else:
-                raise ValueError(f"channel {ch.name!r} has unknown kind {ch.kind!r}")
-        if extra_views is not None:
-            # Sim-specific hook: gets the layout, the start row, and the store
-            # (which carries extras the sim wrote). May add plots, register
-            # frame hooks via ``self``, or do nothing.
-            extra_views(self, glw, plot_row)
-        glw.ci.layout.setRowStretchFactor(0, FIELD_ROW_STRETCH)
+        # Per-shot state, populated by _load_shot.
+        self.shot = None
+        self.frames = None
+        self.nframes = 0
+        self.domain = None
+        self.field_plot = None
+        self.img = None
+        self._frame_hooks = []
+        self._frame = 0
+
+        # Chrome built once; per-shot widgets live inside ``self.glw`` and
+        # are torn down + rebuilt by _load_shot.
+        self.glw = pg.GraphicsLayoutWidget()
+
+        self.shot_combo = QtWidgets.QComboBox()
+        for name in st.shots:
+            self.shot_combo.addItem(name)
+        self.shot_combo.currentTextChanged.connect(self._on_shot_changed)
+        # A single-shot artifact doesn't need a selector taking up the toolbar.
+        self.shot_combo.setVisible(len(st.shots) > 1)
 
         self.play_button = QtWidgets.QPushButton("Play")
         self.play_button.clicked.connect(self.toggle)
         QtGui.QShortcut(QtGui.QKeySequence(QtCore.Qt.Key.Key_Space), self, self.toggle)
         QtGui.QShortcut(QtGui.QKeySequence(QtCore.Qt.Key.Key_Left), self, lambda: self.step(-1))
         QtGui.QShortcut(QtGui.QKeySequence(QtCore.Qt.Key.Key_Right), self, lambda: self.step(1))
+
         self.slider = FineSlider(QtCore.Qt.Orientation.Horizontal)
-        self.slider.setRange(0, self.nframes - 1)
         self.slider.valueChanged.connect(self.set_frame)
         self.slider.sliderPressed.connect(self._scrub_start)
         self.slider.sliderReleased.connect(self._scrub_end)
@@ -128,22 +117,95 @@ class Viewer(QtWidgets.QWidget):
         self.time_label = QtWidgets.QLabel()
 
         controls = QtWidgets.QHBoxLayout()
+        controls.addWidget(self.shot_combo)
         controls.addWidget(self.play_button)
         controls.addWidget(self.slider, stretch=1)
         controls.addWidget(self.time_label)
         layout = QtWidgets.QVBoxLayout(self)
-        layout.addWidget(glw, stretch=1)
+        layout.addWidget(self.glw, stretch=1)
         layout.addLayout(controls)
 
         self.timer = QtCore.QTimer(self)
         self.timer.setInterval(round(1000 / fps))
         self.timer.timeout.connect(self._advance)
+
+        # Initial shot = the first one the artifact lists.
+        self._load_shot(next(iter(st.shots)))
+
+    def _on_shot_changed(self, name):
+        if name:
+            self._load_shot(name)
+
+    def _load_shot(self, name):
+        # Pause playback before tearing down the field plot the timer drives.
+        if self.timer.isActive():
+            self.timer.stop()
+            self.play_button.setText("Play")
+
+        self.shot = self.st.shots[name]
+        self.frames = self.shot.frames
+        self.nframes = len(self.frames) if self.frames is not None else 0
+        self._frame_hooks = []
+        self.field_plot = None
+        self.img = None
+        self.domain = None
+
+        self.glw.clear()
+
+        plot_row = 0
+        if self.frames is not None:
+            self._build_field_view()
+            plot_row = 1
+
+        for ch in self.shot.channels:
+            if len(ch.values) == 0:
+                print(f"warning: channel {ch.name!r} is empty, skipping")
+                continue
+            if ch.kind == "scalar":
+                self._add_scalar(plot_row, ch)
+                plot_row += 1
+            elif ch.kind == "vector":
+                if self.field_plot is not None:
+                    self._add_vector(ch)
+            elif ch.kind == "color":
+                if self.field_plot is not None:
+                    self._add_color(ch)
+            else:
+                raise ValueError(f"channel {ch.name!r} has unknown kind {ch.kind!r}")
+
+        if self.extra_views is not None:
+            # Sim-specific hook: gets this viewer (carries the current shot
+            # as ``viewer.shot``), the layout, and the next free row.
+            self.extra_views(self, self.glw, plot_row)
+
+        if self.field_plot is not None:
+            self.glw.ci.layout.setRowStretchFactor(0, FIELD_ROW_STRETCH)
+
+        # Window title + slider range reflect the current shot.
+        nch = sum(1 for c in self.shot.channels if len(c.values) > 0)
+        if self.frames is not None:
+            nx, ny = self.frames.shape[1:]
+            field_part = f"{self.nframes} frames | {nx}x{ny} cells"
+        else:
+            field_part = "no frames"
+        shot_part = f"shot: {name}" if len(self.st.shots) > 1 else ""
+        self.setWindowTitle(" | ".join(
+            x for x in [self.title, shot_part, field_part, f"{nch} channels"] if x
+        ))
+
+        playable = self.nframes > 1
+        self.slider.blockSignals(True)
+        self.slider.setRange(0, max(0, self.nframes - 1))
+        self.slider.blockSignals(False)
+        self.slider.setEnabled(playable)
+        self.play_button.setEnabled(playable)
+
         self.set_frame(0)
 
-    def _build_field_view(self, glw):
+    def _build_field_view(self):
         _, nx, ny = self.frames.shape
         self.domain = (nx * self.st.dx, ny * self.st.dx)
-        plot = glw.addPlot(row=0, col=0)
+        plot = self.glw.addPlot(row=0, col=0)
         plot.setAspectLocked(True)
         plot.setLabel("bottom", "x", units="m")
         plot.setLabel("left", "y", units="m")
@@ -157,13 +219,12 @@ class Viewer(QtWidgets.QWidget):
         self.cmap = pg.colormap.get(self.st.meta.get("colormap", DEFAULT_COLORMAP))
         self.img = pg.ImageItem(self.frames[0])
         self.img.setLookupTable(self.cmap.getLookupTable(nPts=256))
-        # uint8 0..255 already spans the baked level; 128 = zero pressure.
         self.img.setLevels((0, 255))
         self.img.setRect(QtCore.QRectF(0, 0, *self.domain))
         plot.addItem(self.img)
 
-        if self.st.overlay is not None:
-            overlay = pg.ImageItem(self.st.overlay)
+        if self.shot.overlay is not None:
+            overlay = pg.ImageItem(self.shot.overlay)
             overlay.setRect(QtCore.QRectF(0, 0, *self.domain))
             plot.addItem(overlay)
 
@@ -182,8 +243,8 @@ class Viewer(QtWidgets.QWidget):
 
         return at
 
-    def _add_scalar(self, glw, row, ch):
-        plot = glw.addPlot(row=row, col=0)
+    def _add_scalar(self, row, ch):
+        plot = self.glw.addPlot(row=row, col=0)
         plot.setLabel("left", ch.name)
         plot.setLabel("bottom", "t", units="s")
         t = np.arange(len(ch.values)) * ch.dt
@@ -191,7 +252,7 @@ class Viewer(QtWidgets.QWidget):
         cursor = pg.InfiniteLine(angle=90, pen=OVERLAY_PEN)
         plot.addItem(cursor)
         self._frame_hooks.append(cursor.setPos)
-        if ch.pos is not None:
+        if ch.pos is not None and self.field_plot is not None:
             marker = pg.ScatterPlotItem(
                 [ch.pos[0]], [ch.pos[1]], symbol="o", size=8, pen=OVERLAY_PEN, brush=None
             )
@@ -239,26 +300,31 @@ class Viewer(QtWidgets.QWidget):
 
     def set_frame(self, i):
         self._frame = i
-        self.img.setImage(self.frames[i], autoLevels=False)
+        if self.img is not None and self.nframes > 0:
+            self.img.setImage(self.frames[i], autoLevels=False)
         t = i * self.dt
         for hook in self._frame_hooks:
             hook(t)
         self.slider.blockSignals(True)
         self.slider.setValue(i)
         self.slider.blockSignals(False)
-        self.time_label.setText(f"{t * 1e3:.3f} ms  {i + 1}/{self.nframes}")
+        if self.nframes > 0:
+            self.time_label.setText(f"{t * 1e3:.3f} ms  {i + 1}/{self.nframes}")
+        else:
+            self.time_label.setText("no frames")
 
     def _advance(self):
-        self.set_frame((self._frame + 1) % self.nframes)
+        if self.nframes > 0:
+            self.set_frame((self._frame + 1) % self.nframes)
 
     def step(self, delta):
-        # Pause so the single step isn't immediately overwritten by playback.
+        if self.nframes == 0:
+            return
         if self.timer.isActive():
             self.toggle()
         self.set_frame((self._frame + delta) % self.nframes)
 
     def _scrub_start(self):
-        # Pause while dragging, remembering whether to resume on release.
         self._resume_after_scrub = self.timer.isActive()
         if self._resume_after_scrub:
             self.toggle()
@@ -269,6 +335,8 @@ class Viewer(QtWidgets.QWidget):
             self._resume_after_scrub = False
 
     def toggle(self):
+        if self.nframes == 0:
+            return
         if self.timer.isActive():
             self.timer.stop()
             self.play_button.setText("Play")
@@ -279,17 +347,14 @@ class Viewer(QtWidgets.QWidget):
 
 def launch(st, title="capture", fps=DEFAULT_FPS, extra_views=None):
     """Open the viewer on a Store. ``extra_views`` is an optional callable a
-    sim's ``view.py`` can provide; it gets ``(viewer, layout, start_row)`` so
-    it can add its own pyqtgraph widgets and register frame hooks via
-    ``viewer._frame_hooks.append(...)``."""
+    sim's ``view.py`` can provide; it gets ``(viewer, layout, start_row)``
+    each time a shot is loaded. It can read ``viewer.shot`` for the current
+    shot's data, add its own pyqtgraph widgets, and register frame hooks
+    via ``viewer._frame_hooks.append(...)``."""
     app = pg.mkQApp("FDTD viewer")
     viewer = Viewer(title, st, fps, extra_views=extra_views)
     viewer.show()
 
-    # Qt's event loop runs in C++ and won't deliver SIGINT to Python until the
-    # interpreter regains control, so a bare Ctrl-C is ignored while the window
-    # is up. Quit the app on SIGINT and keep a no-op timer ticking so the
-    # interpreter wakes often enough to actually run the handler.
     signal.signal(signal.SIGINT, lambda *_: app.quit())
     sigint_timer = QtCore.QTimer()
     sigint_timer.timeout.connect(lambda: None)

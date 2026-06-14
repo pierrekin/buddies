@@ -35,10 +35,12 @@ def run(args, out):
         rigid=rigid, damping=edge_sponge((n, n), DX),
     )
 
-    frames = out.open((args.nframes(steps), n, n))
+    shot = out.shot("main")
+    frames = shot.open((args.nframes(steps), n, n))
     for i in simargs.progress(steps):
         sim.step()
         if i % args.capture_every == 0:
             frames[i // args.capture_every] = to_numpy(sim.p)
 
-    out.finish(dt=sim.dt * args.capture_every, dx=DX, c=sim.c, overlay=overlay)
+    shot.finish(overlay=overlay)
+    out.finish(dt=sim.dt * args.capture_every, dx=DX, c=sim.c)

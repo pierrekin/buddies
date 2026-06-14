@@ -29,7 +29,8 @@ def run(args, out):
     tint = Channel("tint", kind="color", dt=sim.dt, pos=TINT)
     energy = Channel("field energy (J/m)", kind="scalar", dt=sim.dt)
 
-    frames = out.open((args.nframes(steps), n, n))
+    shot = out.shot("main")
+    frames = shot.open((args.nframes(steps), n, n))
     for i in simargs.progress(steps):
         sim.step()
         if i % args.capture_every == 0:
@@ -39,7 +40,5 @@ def run(args, out):
         tint.append(probe.pressure(sim, TINT))
         energy.append(probe.energy(sim))
 
-    out.finish(
-        dt=sim.dt * args.capture_every, dx=DX, c=sim.c,
-        channels=(mic, flow, tint, energy),
-    )
+    shot.finish(channels=(mic, flow, tint, energy))
+    out.finish(dt=sim.dt * args.capture_every, dx=DX, c=sim.c)

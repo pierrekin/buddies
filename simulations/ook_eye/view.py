@@ -10,15 +10,15 @@ import pyqtgraph as pg
 
 
 def extra_views(viewer, layout, start_row):
-    st = viewer.st
-    mic = next((c for c in st.channels if c.name.startswith("mic")), None)
+    shot = viewer.shot
+    mic = next((c for c in shot.channels if c.name.startswith("mic")), None)
     if mic is None:
         return  # nothing to fold
-    period = st.extras.get("bit_duration")
+    period = shot.extras.get("bit_duration")
     if period is None:
-        return  # not an eye-capable artifact
+        return  # not an eye-capable shot
 
-    first = int(st.extras.get("first_arrival_sample", 0))
+    first = int(shot.extras.get("first_arrival_sample", 0))
     values = np.asarray(mic.values, dtype=np.float32)[first:]
     dt = mic.dt
     spp = max(1, int(round(period / dt)))
@@ -39,7 +39,7 @@ def extra_views(viewer, layout, start_row):
         pen=pg.mkPen("g", style=pg.QtCore.Qt.PenStyle.DashLine),
     ))
     # Threshold from the demod, if the sim recorded one.
-    threshold = st.extras.get("slicer_threshold")
+    threshold = shot.extras.get("slicer_threshold")
     if threshold is not None:
         plot.addItem(pg.InfiniteLine(
             pos=threshold, angle=0,
