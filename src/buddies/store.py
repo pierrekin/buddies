@@ -25,7 +25,7 @@ META = "meta.json"
 CHANNELS = "channels.npz"
 OVERLAY = "overlay.npy"
 
-_CHANNEL_META = ("name", "kind", "dt", "pos", "scale", "color")
+_CHANNEL_META = ("name", "kind", "dt", "pos", "scale", "color", "period")
 
 
 @dataclass
@@ -33,8 +33,8 @@ class Channel:
     """A named time series recorded alongside the frames.
 
     ``kind`` tells the viewer how to render the values: "scalar", "vector",
-    or "color". ``dt`` is the time between samples, which may differ from the
-    frame dt. ``pos`` (meters) places the channel in the domain.
+    "color", or "eye". ``dt`` is the time between samples, which may differ
+    from the frame dt. ``pos`` (meters) places the channel in the domain.
     """
 
     name: str
@@ -46,6 +46,8 @@ class Channel:
     scale: float | None = None
     # RGBA 0-255 for this channel's overlay graphics. None = viewer default.
     color: tuple | None = None
+    # For "eye" channels: the symbol period (s) the trace is folded against.
+    period: float | None = None
     values: list = field(default_factory=list)
 
     def append(self, value):
@@ -151,6 +153,7 @@ def _load_channels(path):
                 pos=tuple(m["pos"]) if m["pos"] is not None else None,
                 scale=m["scale"],
                 color=tuple(m["color"]) if m["color"] is not None else None,
+                period=m.get("period"),
                 values=data[f"channel_{i}"],
             )
             for i, m in enumerate(chmeta)

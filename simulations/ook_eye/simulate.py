@@ -1,16 +1,10 @@
-"""The bare-minimum acoustic link: on-off keying of a square-wave carrier.
+"""``ook_link`` with an eye diagram on the receiver.
 
-A transmitter on the left of the tank emits a 15 kHz square wave during
-each '1' bit and silence during each '0' bit. A microphone on the right
-slices each per-bit window's RMS pressure against a midpoint threshold to
-decide which bit it heard. Sent and decoded bits print at the end.
-
-Note: the FDTD grid resolves the carrier (10 cells / wavelength by default)
-but heavily attenuates a square wave's higher harmonics (3f, 5f, ...). At
-the mic the wave is closer to a sine; that's fine here because the demod
-just measures energy, but it's why this is a 'square wave' only at the
-source.
-"""
+Same OOK-on-square-wave link, but transmits a longer pseudo-random bit
+pattern so the received signal can be folded against the bit period and
+overlaid into an eye diagram. The eye plot shows every bit window stacked
+on top of every other; a clean 'open' centre means the slicer's job is
+easy, a closed eye means the link is on the edge of failing."""
 
 import math
 
@@ -23,10 +17,17 @@ from buddies.sim import (
 )
 from buddies.store import Channel
 
+DEFAULTS = {"capture_every": 16}  # 32-bit run is long; thin frames so disk stays sane
+
 SIZE = 1.0  # m
 FREQ = 15_000.0  # Hz, square-wave carrier
 BIT_DURATION = 0.001  # s — 15 carrier cycles per bit
-MESSAGE = (1, 0, 1, 1, 0)
+# 32-bit pseudo-random pattern (balanced and varied so the eye has both
+# 0→1 and 1→0 transitions in many positions).
+MESSAGE = (
+    1, 0, 1, 1, 0, 0, 1, 0, 1, 1, 1, 0, 1, 0, 0, 1,
+    0, 1, 0, 0, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1,
+)
 TX = (0.2, 0.5)  # m
 RX = (0.8, 0.5)  # m
 AMPLITUDE = 1.0  # Pa at 1 m — same calibration convention as ``tone()``
@@ -60,14 +61,6 @@ def ook_square(freq, bits, bit_dur, amplitude, at=1.0, ramp_periods=1.0,
         return w_peak * ramp * (1.0 if math.sin(omega * local_t) >= 0 else -1.0)
 
     return waveform
-
-
-def sliding_rms(samples, window_samples):
-    """Sliding-window RMS, same length as ``samples``. The window is the
-    carrier period, so the result is the slow amplitude envelope of the wave."""
-    sq = np.asarray(samples, dtype=np.float32) ** 2
-    kernel = np.ones(window_samples, dtype=np.float32) / window_samples
-    return np.sqrt(np.convolve(sq, kernel, mode="same")).astype(np.float32)
 
 
 def decode(mic_values, sim_dt, n_bits, bit_dur, prop_delay):
@@ -104,7 +97,6 @@ def run(args, out):
         damping=edge_sponge((n, n), DX),
     )
 
-    tx = Channel("TX waveform (m²/s)", kind="scalar", dt=sim.dt, pos=TX)
     mic = Channel("mic (Pa)", kind="scalar", dt=sim.dt, pos=RX)
 
     frames = out.open((args.nframes(steps), n, n))
@@ -112,18 +104,21 @@ def run(args, out):
         sim.step()
         if i % args.capture_every == 0:
             frames[i // args.capture_every] = to_numpy(sim.p)
-        tx.append(tx_waveform(i * sim.dt))
         mic.append(probe.pressure(sim, RX))
-
-    # Carrier-period sliding RMS — the slicer's view of the channel.
-    env_samples = max(1, int(round(1 / FREQ / sim.dt)))
-    envelope = Channel(
-        "mic envelope (Pa, 1-period RMS)", kind="scalar", dt=sim.dt, pos=RX,
-        values=sliding_rms(mic.values, env_samples).tolist(),
-    )
 
     prop_delay = math.hypot(RX[0] - TX[0], RX[1] - TX[1]) / sim.c
     decoded, rms, threshold = decode(mic.values, sim.dt, len(MESSAGE), BIT_DURATION, prop_delay)
+
+    # Eye: feed the mic trace from the first arrival onward; viewer folds at
+    # BIT_DURATION. Drop the leading prop-delay samples so chunk 0 starts at
+    # the first arrival -- otherwise the eye is offset by a fraction of a bit
+    # and the opening drifts.
+    delay_samples = int(round(prop_delay / sim.dt))
+    mic_arr = np.asarray(mic.values, dtype=np.float32)
+    eye = Channel(
+        "RX eye (Pa)", kind="eye", dt=sim.dt, period=BIT_DURATION,
+        values=mic_arr[delay_samples:],
+    )
 
     print(f"sent:    {MESSAGE}")
     print(f"decoded: {decoded}")
@@ -132,5 +127,5 @@ def run(args, out):
 
     out.finish(
         dt=sim.dt * args.capture_every, dx=DX, c=sim.c,
-        channels=(tx, mic, envelope),
+        channels=(eye,),
     )
