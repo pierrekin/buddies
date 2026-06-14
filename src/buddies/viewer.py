@@ -5,17 +5,29 @@ The viewer opens one shot at a time; a combobox switches between them.
 Each shot owns its own frames trajectory, channels, overlay, and extras
 view, so switching rebuilds the layout from scratch."""
 
+import re
 import signal
 
 import numpy as np
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
+# Channel names by convention end in " (unit)" -- e.g. "RX truth (V)". The
+# y-axis gets just the unit so pyqtgraph can SI-prefix the tick labels
+# (mV, µV, ...); the full name lives in the plot title.
+_UNIT_SUFFIX = re.compile(r"\(([^()]+)\)\s*$")
+
 DEFAULT_FPS = 60.0
 DEFAULT_COLORMAP = "CET-D1A"  # diverging blue-white-red, if meta lacks one
 OVERLAY_PEN = "g"
 WINDOW_SIZE = (900, 950)
-FIELD_ROW_STRETCH = 4  # field view height relative to each scalar plot row
+# Minimum heights for each row inside the scrollable layout. The layout's
+# overall minimum height is the sum of its rows', so adding more channels
+# pushes the stack past the viewport and a scrollbar appears. The field
+# row is much taller because it carries the aspect-locked pressure image.
+FIELD_ROW_MIN_HEIGHT = 480
+SCALAR_ROW_MIN_HEIGHT = 170
+EXTRA_ROW_MIN_HEIGHT = 280
 # A vector channel's 95th-percentile magnitude is drawn at this fraction of
 # the domain size.
 VECTOR_LENGTH_FRACTION = 0.1
@@ -87,8 +99,16 @@ class Viewer(QtWidgets.QWidget):
         self._frame = 0
 
         # Chrome built once; per-shot widgets live inside ``self.glw`` and
-        # are torn down + rebuilt by _load_shot.
+        # are torn down + rebuilt by _load_shot. The whole layout (field +
+        # channels + extras) lives in one scroll area; row min-heights keep
+        # plots readable and the field scrolls with the rest.
         self.glw = pg.GraphicsLayoutWidget()
+        self.scroll = QtWidgets.QScrollArea()
+        self.scroll.setWidget(self.glw)
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setHorizontalScrollBarPolicy(
+            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
 
         self.shot_combo = QtWidgets.QComboBox()
         for name in st.shots:
@@ -122,7 +142,7 @@ class Viewer(QtWidgets.QWidget):
         controls.addWidget(self.slider, stretch=1)
         controls.addWidget(self.time_label)
         layout = QtWidgets.QVBoxLayout(self)
-        layout.addWidget(self.glw, stretch=1)
+        layout.addWidget(self.scroll, stretch=1)
         layout.addLayout(controls)
 
         self.timer = QtCore.QTimer(self)
@@ -151,11 +171,13 @@ class Viewer(QtWidgets.QWidget):
         self.domain = None
 
         self.glw.clear()
+        grid = self.glw.ci.layout
 
         plot_row = 0
         if self.frames is not None:
             self._build_field_view()
-            plot_row = 1
+            grid.setRowMinimumHeight(plot_row, FIELD_ROW_MIN_HEIGHT)
+            plot_row += 1
 
         for ch in self.shot.channels:
             if len(ch.values) == 0:
@@ -163,6 +185,7 @@ class Viewer(QtWidgets.QWidget):
                 continue
             if ch.kind == "scalar":
                 self._add_scalar(plot_row, ch)
+                grid.setRowMinimumHeight(plot_row, SCALAR_ROW_MIN_HEIGHT)
                 plot_row += 1
             elif ch.kind == "vector":
                 if self.field_plot is not None:
@@ -173,13 +196,27 @@ class Viewer(QtWidgets.QWidget):
             else:
                 raise ValueError(f"channel {ch.name!r} has unknown kind {ch.kind!r}")
 
+        extras_start = plot_row
         if self.extra_views is not None:
             # Sim-specific hook: gets this viewer (carries the current shot
             # as ``viewer.shot``), the layout, and the next free row.
             self.extra_views(self, self.glw, plot_row)
+            # Anything the extras added gets the extras min height -- they're
+            # typically bar charts / spectra / heatmaps with their own legends
+            # and axis ticks and want a bit more vertical room than a trace.
+            for r in range(extras_start, grid.rowCount()):
+                grid.setRowMinimumHeight(r, EXTRA_ROW_MIN_HEIGHT)
 
-        if self.field_plot is not None:
-            self.glw.ci.layout.setRowStretchFactor(0, FIELD_ROW_STRETCH)
+        # Force the GraphicsLayoutWidget tall enough that all rows hit their
+        # minimum heights; the scroll area then provides a scrollbar instead
+        # of compressing every plot into a few pixels. Ask the QGraphicsGrid
+        # itself rather than summing row mins -- that way contents margins
+        # and inter-row spacing are accounted for, otherwise the top/bottom
+        # rows get clipped at the scroll extremes.
+        grid.invalidate()
+        hint = grid.effectiveSizeHint(QtCore.Qt.SizeHint.MinimumSize)
+        # Small extra to absorb the QGraphicsView frame and pixel rounding.
+        self.glw.setMinimumHeight(int(hint.height()) + 8)
 
         # Window title + slider range reflect the current shot.
         nch = sum(1 for c in self.shot.channels if len(c.values) > 0)
@@ -245,7 +282,12 @@ class Viewer(QtWidgets.QWidget):
 
     def _add_scalar(self, row, ch):
         plot = self.glw.addPlot(row=row, col=0)
-        plot.setLabel("left", ch.name)
+        # Full descriptive name in the title (carries the meaning), short
+        # unit on the y-axis so pyqtgraph SI-prefixes tick labels.
+        plot.setTitle(ch.name, size="9pt")
+        unit_match = _UNIT_SUFFIX.search(ch.name)
+        if unit_match:
+            plot.setLabel("left", units=unit_match.group(1))
         plot.setLabel("bottom", "t", units="s")
         t = np.arange(len(ch.values)) * ch.dt
         plot.plot(t, np.asarray(ch.values))
