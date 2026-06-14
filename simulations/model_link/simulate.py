@@ -52,6 +52,21 @@ PRBS_SEED = 1234
 # decoder still works, which is the point.
 BIT_DURS = (0.001, 0.0005, 0.00025, 0.00015, 0.0001)
 
+# Validation: same OOK at the easy bit duration (where the baseline is
+# BER=0), but with RX nudged off the position the FIR was fit at. We
+# nudge along *y* (perpendicular to the TX-RX axis), not x: y-offsets
+# break the symmetric multipath the chirp was fit under -- the top and
+# bottom wall reflections used to arrive together at RX, now they
+# spread out in time. Axial (x) offsets only shift the prop delay, and
+# at lambda = 100 mm with a slicer half-window of ~500 us at 1 ms bits,
+# anything within the tank looks like aliasing-against-itself.
+#
+# The bit-level agreement may still hold (slicer is forgiving); the
+# waveform NRMSE between v_rx_phys and v_rx_model is the metric that
+# should grow monotonically with offset.
+VALIDATE_BIT_DUR = 0.001
+VALIDATE_OFFSETS_Y_M = (0.010, 0.050, 0.100, 0.200)  # +y from RX
+
 
 def linear_chirp(f_lo, f_hi, duration, amplitude=1.0):
     """Linear sweep from f_lo to f_hi over ``duration``. Same probe
@@ -127,6 +142,7 @@ def run(args, out):
         "role": "train",
         "save_frames": False,
         "bit_dur": None,
+        "rx_pos": RX,
     }]
     for bd in BIT_DURS:
         # Pad shot name so it sorts in the combobox by descending duration.
@@ -139,6 +155,18 @@ def run(args, out):
             # tighter shots are fast to re-run anyway if you want frames.
             "save_frames": bd == BIT_DURS[0],
             "bit_dur": bd,
+            "rx_pos": RX,
+        })
+    for offset in VALIDATE_OFFSETS_Y_M:
+        shots_spec.append({
+            "name": f"validate_offgeom_y{int(offset * 1000):03d}mm",
+            "duration": VALIDATE_BIT_DUR * N_BITS,
+            "voltage_fn": ook_voltage(FREQ, bits, VALIDATE_BIT_DUR, drive_v=1.0),
+            "role": "validate",
+            "save_frames": False,
+            "bit_dur": VALIDATE_BIT_DUR,
+            "rx_offset_m": offset,
+            "rx_pos": (RX[0], RX[1] + offset),
         })
 
     # -- Phase 1: FDTD per shot, capture (v_tx, v_rx_phys). --
@@ -164,11 +192,12 @@ def run(args, out):
         mic_p = np.empty(steps, dtype=np.float32)
 
         print(f"shot {spec['name']}: {steps} steps, {steps * sim.dt * 1e3:.2f} ms")
+        rx_pos = spec["rx_pos"]
         for i in simargs.progress(steps):
             sim.step()
             if frames is not None and i % args.capture_every == 0:
                 frames[i // args.capture_every] = to_numpy(sim.p)
-            mic_p[i] = probe.pressure(sim, RX)
+            mic_p[i] = probe.pressure(sim, rx_pos)
 
         v_rx = MIC.filter(mic_p, sim.dt)
         pairs[spec["name"]] = (v_tx, v_rx, sim.dt)
@@ -183,7 +212,8 @@ def run(args, out):
 
     # -- Phase 3: predict + decode + compare on each link shot. --
     link_specs = [s for s in shots_spec if s["role"] == "test"]
-    sweep_bit_durs, sweep_ber_phys, sweep_ber_model, sweep_agreement = [], [], [], []
+    sweep_bit_durs, sweep_ber_phys, sweep_ber_model = [], [], []
+    sweep_agreement, sweep_waveform_nrmse = [], []
     link_results = {}
     for spec in link_specs:
         name = spec["name"]
@@ -196,6 +226,7 @@ def run(args, out):
         ber_phys = sum(d != b for d, b in zip(bits_phys, bits)) / N_BITS
         ber_model = sum(d != b for d, b in zip(bits_model, bits)) / N_BITS
         agreement = sum(p == m for p, m in zip(bits_phys, bits_model)) / N_BITS
+        waveform_nrmse = float(channel_model.nrmse(v_rx_phys, v_rx_model))
 
         link_results[name] = {
             "v_rx_model": v_rx_model,
@@ -204,6 +235,7 @@ def run(args, out):
             "ber_phys": float(ber_phys),
             "ber_model": float(ber_model),
             "agreement": float(agreement),
+            "waveform_nrmse": waveform_nrmse,
             "threshold_phys": float(thr_phys),
             "threshold_model": float(thr_model),
         }
@@ -211,19 +243,69 @@ def run(args, out):
         sweep_ber_phys.append(float(ber_phys))
         sweep_ber_model.append(float(ber_model))
         sweep_agreement.append(float(agreement))
+        sweep_waveform_nrmse.append(waveform_nrmse)
         print(
             f"  {name:>14}: BER_phys={ber_phys:.3f}  BER_model={ber_model:.3f}"
-            f"  agreement={agreement:.3f}"
+            f"  agreement={agreement:.3f}  NRMSE={waveform_nrmse:.4f}"
         )
 
-    # Sweep summary lives on every shot so the viewer can highlight the
+    # -- Phase 3b: validation -- same OOK at a clean bit_dur, RX moved. --
+    validate_specs = [s for s in shots_spec if s["role"] == "validate"]
+    val_offsets, val_ber_phys, val_ber_model = [], [], []
+    val_agreement, val_waveform_nrmse = [], []
+    val_results = {}
+    for spec in validate_specs:
+        name = spec["name"]
+        v_tx, v_rx_phys, sim_dt = pairs[name]
+        # FIR.predict is geometry-blind -- it returns the trained-RX
+        # response regardless of where the mic actually sat. That's
+        # exactly what we want to test against.
+        v_rx_model = fir.predict(v_tx)[: len(v_rx_phys)]
+
+        bits_phys, _, thr_phys = decode(v_rx_phys, sim_dt, N_BITS, spec["bit_dur"], prop_delay)
+        bits_model, _, thr_model = decode(v_rx_model, sim_dt, N_BITS, spec["bit_dur"], prop_delay)
+
+        ber_phys = sum(d != b for d, b in zip(bits_phys, bits)) / N_BITS
+        ber_model = sum(d != b for d, b in zip(bits_model, bits)) / N_BITS
+        agreement = sum(p == m for p, m in zip(bits_phys, bits_model)) / N_BITS
+        waveform_nrmse = float(channel_model.nrmse(v_rx_phys, v_rx_model))
+
+        val_results[name] = {
+            "v_rx_model": v_rx_model,
+            "decoded_phys": list(bits_phys),
+            "decoded_model": list(bits_model),
+            "ber_phys": float(ber_phys),
+            "ber_model": float(ber_model),
+            "agreement": float(agreement),
+            "waveform_nrmse": waveform_nrmse,
+            "threshold_phys": float(thr_phys),
+            "threshold_model": float(thr_model),
+        }
+        val_offsets.append(float(spec["rx_offset_m"]))
+        val_ber_phys.append(float(ber_phys))
+        val_ber_model.append(float(ber_model))
+        val_agreement.append(float(agreement))
+        val_waveform_nrmse.append(waveform_nrmse)
+        print(
+            f"  {name:>26}: BER_phys={ber_phys:.3f}  BER_model={ber_model:.3f}"
+            f"  agreement={agreement:.3f}  NRMSE={waveform_nrmse:.4f}"
+        )
+
+    # Sweep summaries live on every shot so the viewer can highlight the
     # current shot's point on the curve without juggling a separate
-    # 'summary' shot.
+    # 'summary' shot. Both axes (bit_dur and rx_offset) ship together;
+    # the view picks whichever fits the current shot's role.
     sweep = {
         "sweep_bit_durs": sweep_bit_durs,
         "sweep_ber_phys": sweep_ber_phys,
         "sweep_ber_model": sweep_ber_model,
         "sweep_agreement": sweep_agreement,
+        "sweep_waveform_nrmse": sweep_waveform_nrmse,
+        "validate_offsets": val_offsets,
+        "validate_ber_phys": val_ber_phys,
+        "validate_ber_model": val_ber_model,
+        "validate_agreement": val_agreement,
+        "validate_waveform_nrmse": val_waveform_nrmse,
         "sent_bits": list(bits),
     }
 
@@ -265,6 +347,41 @@ def run(args, out):
                 "ber_phys": r["ber_phys"],
                 "ber_model": r["ber_model"],
                 "agreement": r["agreement"],
+                "waveform_nrmse": r["waveform_nrmse"],
+                "threshold_phys": r["threshold_phys"],
+                "threshold_model": r["threshold_model"],
+                **sweep,
+            },
+        )
+
+    for spec in validate_specs:
+        name = spec["name"]
+        r = val_results[name]
+        v_tx, v_rx_phys, sim_dt = pairs[name]
+        v_rx_model = r["v_rx_model"]
+        residual = (v_rx_phys[: len(v_rx_model)] - v_rx_model).astype(np.float32)
+        # The model's pos is the *trained* RX; phys's pos is the offset.
+        # Both markers land on the field overlay so you can see the gap.
+        shot_writers[name].finish(
+            channels=[
+                Channel("TX (V)", kind="scalar", dt=sim_dt, pos=TX, values=v_tx.tolist()),
+                Channel("RX phys offset (V)", kind="scalar", dt=sim_dt,
+                        pos=spec["rx_pos"], values=v_rx_phys.tolist()),
+                Channel("RX model trained-pos (V)", kind="scalar", dt=sim_dt,
+                        pos=RX, values=v_rx_model.tolist()),
+                Channel("residual phys-model (V)", kind="scalar", dt=sim_dt,
+                        values=residual.tolist()),
+            ],
+            extras={
+                "role": "validate",
+                "bit_dur": float(spec["bit_dur"]),
+                "rx_offset_m": float(spec["rx_offset_m"]),
+                "decoded_phys": r["decoded_phys"],
+                "decoded_model": r["decoded_model"],
+                "ber_phys": r["ber_phys"],
+                "ber_model": r["ber_model"],
+                "agreement": r["agreement"],
+                "waveform_nrmse": r["waveform_nrmse"],
                 "threshold_phys": r["threshold_phys"],
                 "threshold_model": r["threshold_model"],
                 **sweep,
