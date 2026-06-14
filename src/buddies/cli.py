@@ -23,6 +23,7 @@ Options (--resolution, --decimate, ...) follow the positionals.
 """
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
@@ -32,8 +33,16 @@ from buddies import profiling, simargs, store
 
 ROOT = "output"
 SIMS_DIR = "simulations"
+SRC_DIR = os.path.join("src", "buddies")
 DEFAULT_NAME = "default"
 SIM_SIG_KEYS = ("resolution", "cfl", "capture_every", "max_steps")
+# Keys we read off master.meta when building processed's source_sig. The
+# CLI-arg keys plus the source-tree digest so any framework or sim-source
+# edit propagates into processed's signature too.
+MASTER_META_KEYS = (*SIM_SIG_KEYS, "src_digest")
+# Files inside simulations/<sim>/ that don't produce artifacts; skipping
+# them means tweaking a plot doesn't force a full simulate+process rerun.
+NON_ARTIFACT_FILES = {"view.py"}
 
 
 def sim_path(sim, run):
@@ -96,9 +105,34 @@ def _processor(sim):
     return mod, default_process.process
 
 
-def _sim_sig(args):
+def _src_digest(sim):
+    """SHA-256 over the .py files that affect this sim's artifacts.
+
+    Walks ``src/buddies/`` and ``simulations/<sim>/``, skipping caches and
+    view-only files. The digest goes into the master's meta; ``show`` then
+    treats any source-tree change as a reason to rerun simulate/process."""
+    paths = []
+    for root in (SRC_DIR, os.path.join(SIMS_DIR, sim)):
+        for dp, _, files in os.walk(root):
+            if "__pycache__" in dp.split(os.sep):
+                continue
+            for f in files:
+                if not f.endswith(".py") or f in NON_ARTIFACT_FILES:
+                    continue
+                paths.append(os.path.join(dp, f))
+    h = hashlib.sha256()
+    for p in sorted(paths):
+        h.update(p.encode())
+        h.update(b"\0")
+        with open(p, "rb") as fh:
+            h.update(fh.read())
+        h.update(b"\0")
+    return h.hexdigest()[:16]
+
+
+def _sim_sig(args, sim):
     """The signature recorded for a master built with these args."""
-    return {k: getattr(args, k) for k in SIM_SIG_KEYS}
+    return {k: getattr(args, k) for k in SIM_SIG_KEYS} | {"src_digest": _src_digest(sim)}
 
 
 def _read_meta(path):
@@ -119,7 +153,7 @@ def _stale(path, expected):
 
 def _write_master(mod, sim, run, args):
     path = sim_path(sim, run)
-    writer = store.Writer(path, {"kind": "master", "sim": sim, "run": run, **_sim_sig(args)})
+    writer = store.Writer(path, {"kind": "master", "sim": sim, "run": run, **_sim_sig(args, sim)})
     mod.run(args, writer)
     return path
 
@@ -198,7 +232,7 @@ def cmd_process(a):
     if not os.path.isdir(sim_path(a.sim, ns.run)):
         _die_listing(f"runs for {a.sim}", _dirs(os.path.join(ROOT, a.sim, "sim")), prefix=f"no run {ns.run!r}")
     master = store.open_store(sim_path(a.sim, ns.run))
-    source_sig = {k: master.meta.get(k) for k in SIM_SIG_KEYS}
+    source_sig = {k: master.meta.get(k) for k in MASTER_META_KEYS}
     print(f"wrote {_write_processed(proc, a.sim, ns.run, out, pargs, source_sig)}")
 
 
@@ -237,7 +271,7 @@ def cmd_show(a):
     pargs = simargs.process_args(ns)
     run = ns.run
     out = ns.out or ns.run
-    sig = _sim_sig(args)
+    sig = _sim_sig(args, a.sim)
 
     mpath = sim_path(a.sim, run)
     if _stale(mpath, sig):
