@@ -140,7 +140,6 @@ def run(args, out):
         "duration": 0.005,
         "voltage_fn": linear_chirp(5_000.0, 30_000.0, 0.005),
         "role": "train",
-        "save_frames": False,
         "bit_dur": None,
         "rx_pos": RX,
     }]
@@ -151,9 +150,6 @@ def run(args, out):
             "duration": bd * N_BITS,
             "voltage_fn": ook_voltage(FREQ, bits, bd, drive_v=1.0),
             "role": "test",
-            # Save frames only for the easiest link, as eye-candy. The
-            # tighter shots are fast to re-run anyway if you want frames.
-            "save_frames": bd == BIT_DURS[0],
             "bit_dur": bd,
             "rx_pos": RX,
         })
@@ -163,7 +159,6 @@ def run(args, out):
             "duration": VALIDATE_BIT_DUR * N_BITS,
             "voltage_fn": ook_voltage(FREQ, bits, VALIDATE_BIT_DUR, drive_v=1.0),
             "role": "validate",
-            "save_frames": False,
             "bit_dur": VALIDATE_BIT_DUR,
             "rx_offset_m": offset,
             "rx_pos": (RX[0], RX[1] + offset),
@@ -183,7 +178,7 @@ def run(args, out):
 
         sw = out.shot(spec["name"])
         shot_writers[spec["name"]] = sw
-        frames = sw.open((args.nframes(steps), n, n)) if spec["save_frames"] else None
+        frames = sw.open((args.nframes(steps), n, n))
 
         v_tx = np.fromiter(
             (voltage_fn(i * sim.dt) for i in range(steps)),
@@ -195,7 +190,7 @@ def run(args, out):
         rx_pos = spec["rx_pos"]
         for i in simargs.progress(steps):
             sim.step()
-            if frames is not None and i % args.capture_every == 0:
+            if i % args.capture_every == 0:
                 frames[i // args.capture_every] = to_numpy(sim.p)
             mic_p[i] = probe.pressure(sim, rx_pos)
 

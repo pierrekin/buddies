@@ -102,7 +102,6 @@ PROBES = [
         "duration": 0.005,
         "voltage_fn": linear_chirp(5_000.0, 30_000.0, 0.005),
         "role": "train",
-        "save_frames": True,
     },
     {
         "name": "ook",
@@ -112,14 +111,12 @@ PROBES = [
             FREQ, (1, 0, 1, 1, 0, 0, 1, 0, 1, 1, 1, 0, 1, 0, 0, 1), 0.001,
         ),
         "role": "test",
-        "save_frames": True,
     },
     {
         "name": "tone_burst",
         "duration": 0.0025,
         "voltage_fn": tone_burst(FREQ, n_cycles=30),
         "role": "test",
-        "save_frames": True,
     },
     {
         "name": "prbs",
@@ -128,7 +125,6 @@ PROBES = [
         # channel's f0 ~ 15 kHz, so the link actually responds.
         "voltage_fn": prbs(0.00003, n_bits=200),
         "role": "test",
-        "save_frames": True,
     },
 ]
 
@@ -170,7 +166,7 @@ def run(args, out):
 
         sw = out.shot(p["name"])
         shot_writers[p["name"]] = sw
-        frames = sw.open((args.nframes(steps), n, n)) if p["save_frames"] else None
+        frames = sw.open((args.nframes(steps), n, n))
 
         v_tx = np.fromiter(
             (voltage_fn(i * sim.dt) for i in range(steps)),
@@ -181,7 +177,7 @@ def run(args, out):
         print(f"shot {p['name']}: {steps} steps, {steps * sim.dt * 1e3:.2f} ms")
         for i in simargs.progress(steps):
             sim.step()
-            if frames is not None and i % args.capture_every == 0:
+            if i % args.capture_every == 0:
                 frames[i // args.capture_every] = to_numpy(sim.p)
             mic_p[i] = probe.pressure(sim, RX)
 
