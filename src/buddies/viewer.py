@@ -70,7 +70,7 @@ class FineSlider(QtWidgets.QSlider):
 
 
 class Viewer(QtWidgets.QWidget):
-    def __init__(self, title, st, fps):
+    def __init__(self, title, st, fps, extra_views=None):
         super().__init__()
         self.st = st
         self.frames = st.frames
@@ -99,11 +99,13 @@ class Viewer(QtWidgets.QWidget):
                 self._add_vector(ch)
             elif ch.kind == "color":
                 self._add_color(ch)
-            elif ch.kind == "eye":
-                self._add_eye(glw, plot_row, ch)
-                plot_row += 1
             else:
                 raise ValueError(f"channel {ch.name!r} has unknown kind {ch.kind!r}")
+        if extra_views is not None:
+            # Sim-specific hook: gets the layout, the start row, and the store
+            # (which carries extras the sim wrote). May add plots, register
+            # frame hooks via ``self``, or do nothing.
+            extra_views(self, glw, plot_row)
         glw.ci.layout.setRowStretchFactor(0, FIELD_ROW_STRETCH)
 
         self.play_button = QtWidgets.QPushButton("Play")
@@ -219,30 +221,6 @@ class Viewer(QtWidgets.QWidget):
 
         self._frame_hooks.append(update)
 
-    def _add_eye(self, glw, row, ch):
-        """An eye diagram: fold the trace onto a 2-period x-axis by chopping
-        it into ``period``-sized chunks (each chunk 2*period long, so adjacent
-        chunks overlap by one period) and overlaying them with low alpha so
-        the eye opening shows up as the high-contrast region."""
-        if ch.period is None:
-            raise ValueError(f"eye channel {ch.name!r} needs a 'period'")
-        plot = glw.addPlot(row=row, col=0)
-        plot.setLabel("left", ch.name)
-        plot.setLabel("bottom", "t (folded)", units="s")
-        values = np.asarray(ch.values, dtype=np.float32)
-        spp = max(1, int(round(ch.period / ch.dt)))
-        chunk_len = 2 * spp
-        n_chunks = max(0, (len(values) - chunk_len) // spp + 1)
-        t = np.arange(chunk_len) * ch.dt
-        pen = pg.mkPen(color=(80, 200, 255, 80))
-        for i in range(n_chunks):
-            plot.plot(t, values[i * spp : i * spp + chunk_len], pen=pen)
-        # Decision marker: vertical line at the slicer time (middle of a symbol),
-        # so the "eye opening" the demod sees lines up with something visible.
-        plot.addItem(pg.InfiniteLine(
-            pos=1.5 * ch.period, angle=90, pen=pg.mkPen("g", style=QtCore.Qt.PenStyle.DashLine)
-        ))
-
     def _add_color(self, ch):
         values = np.asarray(ch.values)
         lo, hi = float(values.min()), float(values.max())
@@ -299,9 +277,13 @@ class Viewer(QtWidgets.QWidget):
             self.play_button.setText("Pause")
 
 
-def launch(st, title="capture", fps=DEFAULT_FPS):
+def launch(st, title="capture", fps=DEFAULT_FPS, extra_views=None):
+    """Open the viewer on a Store. ``extra_views`` is an optional callable a
+    sim's ``view.py`` can provide; it gets ``(viewer, layout, start_row)`` so
+    it can add its own pyqtgraph widgets and register frame hooks via
+    ``viewer._frame_hooks.append(...)``."""
     app = pg.mkQApp("FDTD viewer")
-    viewer = Viewer(title, st, fps)
+    viewer = Viewer(title, st, fps, extra_views=extra_views)
     viewer.show()
 
     # Qt's event loop runs in C++ and won't deliver SIGINT to Python until the

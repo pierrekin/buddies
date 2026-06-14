@@ -4,7 +4,11 @@ Same OOK-on-square-wave link, but transmits a longer pseudo-random bit
 pattern so the received signal can be folded against the bit period and
 overlaid into an eye diagram. The eye plot shows every bit window stacked
 on top of every other; a clean 'open' centre means the slicer's job is
-easy, a closed eye means the link is on the edge of failing."""
+easy, a closed eye means the link is on the edge of failing.
+
+The mic trace lands as a normal scalar channel; the bit period and the
+prop-delay-trimmed start sample go into ``extras`` so the sim's ``view.py``
+can fold the trace into an eye diagram."""
 
 import math
 
@@ -108,17 +112,7 @@ def run(args, out):
 
     prop_delay = math.hypot(RX[0] - TX[0], RX[1] - TX[1]) / sim.c
     decoded, rms, threshold = decode(mic.values, sim.dt, len(MESSAGE), BIT_DURATION, prop_delay)
-
-    # Eye: feed the mic trace from the first arrival onward; viewer folds at
-    # BIT_DURATION. Drop the leading prop-delay samples so chunk 0 starts at
-    # the first arrival -- otherwise the eye is offset by a fraction of a bit
-    # and the opening drifts.
     delay_samples = int(round(prop_delay / sim.dt))
-    mic_arr = np.asarray(mic.values, dtype=np.float32)
-    eye = Channel(
-        "RX eye (Pa)", kind="eye", dt=sim.dt, period=BIT_DURATION,
-        values=mic_arr[delay_samples:],
-    )
 
     print(f"sent:    {MESSAGE}")
     print(f"decoded: {decoded}")
@@ -127,5 +121,13 @@ def run(args, out):
 
     out.finish(
         dt=sim.dt * args.capture_every, dx=DX, c=sim.c,
-        channels=(eye,),
+        channels=(mic,),
+        extras={
+            "bit_duration": BIT_DURATION,
+            "first_arrival_sample": delay_samples,
+            "sent": list(MESSAGE),
+            "decoded": list(decoded),
+            "per_bit_rms": [float(r) for r in rms],
+            "slicer_threshold": float(threshold),
+        },
     )

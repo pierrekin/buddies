@@ -93,4 +93,15 @@ def run(args, out):
     guess = Channel("bearing", kind="vector", dt=sim.dt, pos=center)
     guess.values = [(0.0, 0.0)] * ready + [direction] * (steps - ready)
 
-    out.finish(dt=sim.dt * args.capture_every, dx=DX, c=sim.c, channels=(guess, *lights))
+    out.finish(
+        dt=sim.dt * args.capture_every, dx=DX, c=sim.c,
+        channels=(guess, *lights),
+        extras={
+            "true_source": list(SOURCE),
+            "estimated_position": list(estimate),
+            "true_bearing_deg": math.degrees(true_bearing),
+            "estimated_bearing_deg": math.degrees(bearing),
+            "bearing_error_deg": math.degrees(bearing - true_bearing),
+            "arrival_steps": arrival_steps.astype(np.int32),
+        },
+    )

@@ -8,10 +8,17 @@ can be a plain ``.npy`` that is memory-mapped for streaming reads and writes
     meta.json      scalar parameters and provenance
     channels.npz   recorded channels (metadata + arrays), small enough to buffer
     overlay.npy    optional (nx, ny, 4) uint8 image drawn over the field
+    extras.json    optional sim-specific scalars/lists/dicts (JSON-able)
+    extras.npz     optional sim-specific arrays (numpy)
 
 Masters store float32 pressure; processed artifacts store uint8 frames
 normalized to a baked display level. Both use this same layout, so one reader
 serves both and the differences live in ``meta``.
+
+``extras`` is the framework's escape hatch: sims write non-physical results
+(model parameters, decoded bits, derived stats, fitted arrays) into it
+without buddies having to understand what's inside. Pair it with a per-sim
+``view.py`` to render them.
 """
 
 import json
@@ -24,8 +31,10 @@ FRAMES = "frames.npy"
 META = "meta.json"
 CHANNELS = "channels.npz"
 OVERLAY = "overlay.npy"
+EXTRAS_JSON = "extras.json"
+EXTRAS_NPZ = "extras.npz"
 
-_CHANNEL_META = ("name", "kind", "dt", "pos", "scale", "color", "period")
+_CHANNEL_META = ("name", "kind", "dt", "pos", "scale", "color")
 
 
 @dataclass
@@ -33,8 +42,12 @@ class Channel:
     """A named time series recorded alongside the frames.
 
     ``kind`` tells the viewer how to render the values: "scalar", "vector",
-    "color", or "eye". ``dt`` is the time between samples, which may differ
-    from the frame dt. ``pos`` (meters) places the channel in the domain.
+    or "color". ``dt`` is the time between samples, which may differ from the
+    frame dt. ``pos`` (meters) places the channel in the domain.
+
+    Anything non-physical (eye-fold parameters, model coefficients, decoded
+    bits) belongs in the sim's ``extras`` dict and its own ``view.py``, not
+    here.
     """
 
     name: str
@@ -46,8 +59,6 @@ class Channel:
     scale: float | None = None
     # RGBA 0-255 for this channel's overlay graphics. None = viewer default.
     color: tuple | None = None
-    # For "eye" channels: the symbol period (s) the trace is folded against.
-    period: float | None = None
     values: list = field(default_factory=list)
 
     def append(self, value):
@@ -65,8 +76,12 @@ def open_frames(path, shape, dtype=np.float32):
     )
 
 
-def write_sidecar(path, meta, channels=(), overlay=None):
-    """Write meta.json, channels.npz, and optionally overlay.npy into ``path``."""
+def write_sidecar(path, meta, channels=(), overlay=None, extras=None):
+    """Write the canonical sidecar files plus optional ``extras`` into ``path``.
+
+    ``extras`` is a flat dict the sim owns. numpy arrays in it land in
+    ``extras.npz`` (preserving dtype/shape); everything else lands in
+    ``extras.json``. Buddies never inspects either file."""
     os.makedirs(path, exist_ok=True)
     with open(os.path.join(path, META), "w") as f:
         json.dump(meta, f, indent=2)
@@ -82,6 +97,26 @@ def write_sidecar(path, meta, channels=(), overlay=None):
     if overlay is not None:
         np.save(os.path.join(path, OVERLAY), overlay)
 
+    if extras:
+        json_part, array_part = _split_extras(extras)
+        if json_part:
+            with open(os.path.join(path, EXTRAS_JSON), "w") as f:
+                json.dump(json_part, f, indent=2)
+        if array_part:
+            np.savez(os.path.join(path, EXTRAS_NPZ), **array_part)
+
+
+def _split_extras(extras):
+    """Partition ``extras`` into (json-able dict, numpy array dict). Numpy
+    arrays go to npz; everything else must be JSON-serializable as-is."""
+    json_part, array_part = {}, {}
+    for k, v in extras.items():
+        if isinstance(v, np.ndarray):
+            array_part[k] = v
+        else:
+            json_part[k] = v
+    return json_part, array_part
+
 
 class Writer:
     """Collects an artifact's pieces as they are produced: ``open`` hands out
@@ -96,12 +131,12 @@ class Writer:
         self.frames = open_frames(self.path, shape, dtype)
         return self.frames
 
-    def finish(self, *, dt, dx, c, channels=(), overlay=None, **extra):
+    def finish(self, *, dt, dx, c, channels=(), overlay=None, extras=None, **extra):
         if self.frames is not None:
             self.frames.flush()
         # provenance wins on key clashes
         meta = {"dt": dt, "dx": dx, "c": c, **extra, **self._provenance}
-        write_sidecar(self.path, meta, channels, overlay)
+        write_sidecar(self.path, meta, channels, overlay, extras)
 
 
 @dataclass(frozen=True)
@@ -114,6 +149,7 @@ class Store:
     meta: dict
     channels: tuple = ()
     overlay: np.ndarray | None = None
+    extras: dict = field(default_factory=dict)
 
     @property
     def dt(self):
@@ -137,7 +173,27 @@ def open_store(path):
     channels = _load_channels(os.path.join(path, CHANNELS))
     overlay_path = os.path.join(path, OVERLAY)
     overlay = np.load(overlay_path) if os.path.exists(overlay_path) else None
-    return Store(path=path, frames=frames, meta=meta, channels=channels, overlay=overlay)
+    extras = _load_extras(path)
+    return Store(
+        path=path, frames=frames, meta=meta,
+        channels=channels, overlay=overlay, extras=extras,
+    )
+
+
+def _load_extras(path):
+    """Read back the dict that was passed to ``out.finish(extras=...)``.
+    Missing files = empty dict (sims without extras are normal)."""
+    extras = {}
+    json_path = os.path.join(path, EXTRAS_JSON)
+    if os.path.exists(json_path):
+        with open(json_path) as f:
+            extras.update(json.load(f))
+    npz_path = os.path.join(path, EXTRAS_NPZ)
+    if os.path.exists(npz_path):
+        with np.load(npz_path) as data:
+            for k in data.files:
+                extras[k] = data[k]
+    return extras
 
 
 def _load_channels(path):
@@ -153,7 +209,6 @@ def _load_channels(path):
                 pos=tuple(m["pos"]) if m["pos"] is not None else None,
                 scale=m["scale"],
                 color=tuple(m["color"]) if m["color"] is not None else None,
-                period=m.get("period"),
                 values=data[f"channel_{i}"],
             )
             for i, m in enumerate(chmeta)

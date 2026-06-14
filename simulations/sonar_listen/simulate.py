@@ -118,6 +118,7 @@ def run(args, out):
     if loudness < MIN_ECHO:
         print(f"{LOOK_DEG:+.0f} deg: no echo (peak {loudness:.4f} Pa)")
         vec = (0.0, 0.0)
+        detection = {"deg": float(LOOK_DEG), "range_m": None, "loudness_pa": loudness}
     else:
         echo_rel = int(listen.argmax())
         # Path measured at the peak is outgoing (center->target) plus the return
@@ -126,6 +127,7 @@ def run(args, out):
         dist = sim.c * ((blank_steps + echo_rel - emit) * sim.dt - PEAK_OFFSET_S) - dists.max()
         vec = (dist * math.cos(a), dist * math.sin(a))
         print(f"{LOOK_DEG:+.0f} deg: range {dist:.3f} m  (peak {loudness:.4f} Pa)")
+        detection = {"deg": float(LOOK_DEG), "range_m": float(dist), "loudness_pa": loudness}
 
     ch = Channel("", kind="vector", dt=sim.dt, pos=CENTER, scale=1.0, color=(255, 180, 40, 255))
     ch.values = [vec] * steps
@@ -137,4 +139,5 @@ def run(args, out):
     out.finish(
         dt=sim.dt * args.capture_every, dx=DX, c=sim.c,
         channels=(mic, ch), overlay=overlay,
+        extras={"detections": [detection]},
     )

@@ -118,4 +118,14 @@ def run(args, out):
     out.finish(
         dt=sim.dt * args.capture_every, dx=DX, c=sim.c,
         channels=(tx, mic, envelope),
+        extras={
+            "distance": float(distance),
+            "probe_freq": float(FREQ),
+            "expected_peak_time": float(expected_delay),
+            "measured_peak_time": float(peak_time),
+            "measured_peak_pa": peak_pa,
+            "spectral_peak_freq": float(freqs[spec_peak]),
+            "spectrum_freqs": freqs.astype(np.float32),
+            "spectrum_mag": spec.astype(np.float32),
+        },
     )

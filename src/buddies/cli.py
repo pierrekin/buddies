@@ -79,6 +79,13 @@ def _require_simulate(sim):
     return mod
 
 
+def _extra_views(sim):
+    """The ``extra_views`` callable from the sim's optional ``view.py``, or
+    None if it doesn't ship one (or doesn't export the function)."""
+    mod = _load_stage(sim, "view")
+    return getattr(mod, "extra_views", None) if mod is not None else None
+
+
 def _processor(sim):
     """The sim's own ``process`` if it ships one, else the default processor."""
     mod = _load_stage(sim, "process")
@@ -206,7 +213,10 @@ def cmd_view(a):
     if not os.path.isdir(proc_path(a.sim, ns.out)):
         _die_listing(f"outputs for {a.sim}", _dirs(os.path.join(ROOT, a.sim, "processed")), prefix=f"no output {ns.out!r}")
     st = store.open_store(proc_path(a.sim, ns.out))
-    viewer.launch(st, title=f"{a.sim}/{ns.out}", fps=ns.fps)
+    viewer.launch(
+        st, title=f"{a.sim}/{ns.out}", fps=ns.fps,
+        extra_views=_extra_views(a.sim),
+    )
 
 
 def cmd_show(a):
@@ -243,7 +253,10 @@ def cmd_show(a):
     else:
         print(f"processed {a.sim}/{out} up to date")
 
-    viewer.launch(store.open_store(ppath), title=f"{a.sim}/{out}", fps=ns.fps)
+    viewer.launch(
+        store.open_store(ppath), title=f"{a.sim}/{out}", fps=ns.fps,
+        extra_views=_extra_views(a.sim),
+    )
 
 
 def main():

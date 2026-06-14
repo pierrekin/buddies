@@ -133,4 +133,11 @@ def run(args, out):
     out.finish(
         dt=sim.dt * args.capture_every, dx=DX, c=sim.c,
         channels=(tx, mic, envelope),
+        extras={
+            "bit_duration": BIT_DURATION,
+            "sent": list(MESSAGE),
+            "decoded": list(decoded),
+            "per_bit_rms": [float(r) for r in rms],
+            "slicer_threshold": float(threshold),
+        },
     )

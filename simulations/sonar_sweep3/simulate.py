@@ -161,11 +161,13 @@ def run(args, out):
 
     loudest = max((loudness for _, dist, loudness, _ in results if dist is not None), default=None)
     depth_channels = []
+    detections = []
     for deg, dist, loudness, ready in results:
         if dist is None:
             values = [(0.0, 0.0)] * steps
             color = None
             print(f"{deg:+3d} deg: no echo")
+            detections.append({"deg": int(deg), "range_m": None, "loudness_pa": loudness, "db": None})
         else:
             a = math.radians(deg)
             vec = (dist * math.cos(a), dist * math.sin(a))
@@ -174,6 +176,7 @@ def run(args, out):
             q = max(0.0, 1 + db / COLOR_SPAN_DB)
             color = tuple(int(v) for v in np.rint(COLD + (HOT - COLD) * q))
             print(f"{deg:+3d} deg: range {dist:.3f} m  {db:+6.1f} dB")
+            detections.append({"deg": int(deg), "range_m": float(dist), "loudness_pa": loudness, "db": float(db)})
 
         ch = Channel("", kind="vector", dt=sim.dt, pos=CENTER, scale=1.0, color=color)
         ch.values = values
@@ -185,4 +188,5 @@ def run(args, out):
     out.finish(
         dt=sim.dt * args.capture_every, dx=DX, c=sim.c,
         channels=(mic, *depth_channels), overlay=overlay,
+        extras={"detections": detections},
     )

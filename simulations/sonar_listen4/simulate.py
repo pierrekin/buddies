@@ -169,10 +169,20 @@ def run(args, out):
     overlay = _heatmap(X, Y, energy, r_axis)
     np.copyto(overlay, truth, where=truth[..., 3:] > 0)
 
+    detections = []
+    emax = float(energy.max()) if energy.size else 0.0
     for k, deg in enumerate(ANGLES_DEG):
         peak = int(energy[k].argmax())
-        db = 10 * math.log10(energy[k, peak] / energy.max()) if energy[k, peak] > 0 else -np.inf
-        print(f"{deg:+3d} deg: peak energy at {r_axis[peak]:.3f} m  {db:+6.1f} dB")
+        e_peak = float(energy[k, peak])
+        db = 10 * math.log10(e_peak / emax) if e_peak > 0 and emax > 0 else None
+        print(f"{deg:+3d} deg: peak energy at {r_axis[peak]:.3f} m  "
+              f"{db:+6.1f} dB" if db is not None else f"{deg:+3d} deg: no energy")
+        detections.append({
+            "deg": int(deg),
+            "peak_range_m": float(r_axis[peak]),
+            "peak_energy": e_peak,
+            "db": db,
+        })
 
     best = int(energy.max(axis=1).argmax())
     # No pos: this is the whole array's formed output, not a point in the field.
@@ -181,6 +191,13 @@ def run(args, out):
 
     out.finish(
         dt=sim.dt * args.capture_every, dx=DX, c=sim.c, channels=(mic,), overlay=overlay,
+        extras={
+            "detections": detections,
+            "angles_deg": np.array(list(ANGLES_DEG), dtype=np.float32),
+            "range_bins_m": r_axis.astype(np.float32),
+            "energy_map": energy.astype(np.float32),
+            "color_span_db": COLOR_SPAN_DB,
+        },
     )
 
 

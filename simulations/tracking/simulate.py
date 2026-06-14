@@ -79,6 +79,7 @@ def run(args, out):
     # Estimate per hop window, then feed the bearing vector from the moment the
     # window's last mic has reported.
     guess_values = [(0.0, 0.0)] * steps
+    hops = []
     for k, true_pos in enumerate(POSITIONS):
         window = np.abs(recordings[k * hop_steps : (k + 1) * hop_steps])
         arrival_steps = np.array([arrival(window[:, j]) for j in range(MICS)])
@@ -95,6 +96,14 @@ def run(args, out):
             f"true {math.degrees(true_bearing):6.1f} deg, "
             f"position ({estimate[0]:.2f}, {estimate[1]:.2f}) vs true {true_pos}"
         )
+        hops.append({
+            "hop": k,
+            "true_position": list(true_pos),
+            "estimated_position": list(estimate),
+            "true_bearing_deg": math.degrees(true_bearing),
+            "estimated_bearing_deg": math.degrees(bearing),
+            "bearing_error_deg": math.degrees(bearing - true_bearing),
+        })
 
         ready = k * hop_steps + int(arrival_steps.max()) + 1
         direction = (math.cos(bearing), math.sin(bearing))
@@ -104,4 +113,8 @@ def run(args, out):
     guess = Channel("bearing", kind="vector", dt=sim.dt, pos=center)
     guess.values = guess_values
 
-    out.finish(dt=sim.dt * args.capture_every, dx=DX, c=sim.c, channels=(guess, *lights))
+    out.finish(
+        dt=sim.dt * args.capture_every, dx=DX, c=sim.c,
+        channels=(guess, *lights),
+        extras={"hops": hops},
+    )

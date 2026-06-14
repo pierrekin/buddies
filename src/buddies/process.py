@@ -53,6 +53,7 @@ def process(master, args, out):
         c=master.c,
         channels=master.channels,
         overlay=master.overlay,
+        extras=master.extras,
         lim=lim,
         colormap=COLORMAP,
     )
