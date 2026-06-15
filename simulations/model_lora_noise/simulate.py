@@ -61,7 +61,7 @@ CSS_PROCESSING_GAIN_DB = 10.0 * math.log10(BIT_DUR * CSS_BANDWIDTH)
 N_NOISE_SOURCES = 16
 NOISE_LAYOUT_SEED = 42
 NOISE_DRIVE_SEED = 11
-NOISE_MARGIN = 0.1
+NOISE_MARGIN = 0.2  # > default 150 mm sponge depth so noise sources land in the fluid
 # Centred around where OOK transitions from BER 0 to BER ~ 0.5, so both
 # the OOK and CSS curves' transition regions are visible.
 NOISE_SIGMAS = (0.0, 1e-7, 3e-7, 1e-6, 3e-6, 1e-5)

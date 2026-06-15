@@ -71,7 +71,7 @@ PRBS_SEED = 1234
 N_NOISE_SOURCES = 16
 NOISE_LAYOUT_SEED = 42
 NOISE_DRIVE_SEED = 11
-NOISE_MARGIN = 0.1
+NOISE_MARGIN = 0.2  # > default 150 mm sponge depth so noise sources land in the fluid
 # Wide enough to span BER 0 -> ~0.5 for both the single-source and the
 # 8-element broadside curves. The broadside curve sits ~18 dB to the right
 # of single, so the sweep extends well past where single fully fails.

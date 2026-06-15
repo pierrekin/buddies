@@ -65,7 +65,7 @@ BIT_DUR = 0.001
 N_NOISE_SOURCES = 16
 NOISE_LAYOUT_SEED = 42
 NOISE_DRIVE_SEED = 11
-NOISE_MARGIN = 0.1
+NOISE_MARGIN = 0.2  # > default 150 mm sponge depth so noise sources land in the fluid
 NOISE_SIGMAS = (0.0, 1e-7, 3e-7, 1e-6, 3e-6, 1e-5, 3e-5)
 
 

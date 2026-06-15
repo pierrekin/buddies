@@ -41,7 +41,14 @@ class AmbientNoise:
     ``sources()`` call: same seed + same shape = same realisation.
     """
 
-    def __init__(self, n_sources, domain_size, margin=0.1, layout_seed=42):
+    def __init__(self, n_sources, domain_size, margin=0.2, layout_seed=42):
+        # ``margin`` must be larger than the FDTD's sponge depth, otherwise
+        # noise sources land inside the sponge and the wave equation eats
+        # most of their output before it ever reaches the receiver. The
+        # default sponge in ``buddies.sim.edge_sponge`` is 15 cells deep
+        # which is 150 mm at the typical dx=10 mm grid, so the default
+        # ``margin=0.2`` clears it with room to spare. Pass a larger value
+        # if you use a coarser grid or a deeper sponge.
         if n_sources < 0:
             raise ValueError(f"n_sources must be >= 0, got {n_sources}")
         if margin * 2 >= domain_size:
