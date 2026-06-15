@@ -1,0 +1,8 @@
+[build]
+target = "thumbv7em-none-eabihf"
+
+[target.thumbv7em-none-eabihf]
+runner = "qemu-system-arm -cpu cortex-m7 -machine mps2-an500 -nographic -semihosting-config enable=on,target=native -chardev socket,id=buddy_uart,host=127.0.0.1,port=5555,reconnect-ms=2000 -serial chardev:buddy_uart -kernel"
+rustflags = [
+  "-C", "link-arg=-Tlink.x",
+]
