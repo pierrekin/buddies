@@ -28,7 +28,7 @@ import numpy as np
 
 from buddies import channel_model, probe, simargs
 from buddies.devices import Microphone, Speaker
-from buddies.noise import AmbientNoise
+from buddies.noise import AmbientNoise, noise_power_per_unit_sigma_sq
 from buddies.sim import AcousticFDTD, edge_sponge, timestep, to_numpy
 from buddies.store import Channel
 
@@ -71,6 +71,8 @@ NOISE_LAYOUT_SEED = 42
 NOISE_DRIVE_SEED = 11
 NOISE_MARGIN = 0.2  # > default 150 mm sponge depth so noise sources land in the fluid
 NOISE_SIGMAS = (0.0, 3e-7, 1e-6, 3e-6, 1e-5, 3e-5)
+NOISE_SIGMA_REF = 1e-6
+NOISE_CAL_WARMUP_S = 0.003
 
 
 def linear_chirp(f_lo, f_hi, duration, amplitude=1.0):
@@ -295,6 +297,48 @@ def run(args, out):
     train_nrmse = float(channel_model.nrmse(v_rx_char, char_pred))
     print(f"  fitted {fir.name}: training NRMSE = {train_nrmse:.4f}")
 
+    # -- Phase 1b: noise-only calibration. --
+    # The longest comms shot here is the SF=9 LoRa run; we calibrate over
+    # the same duration so steady-state stats are meaningful for it too.
+    longest_duration = max(
+        OOK_BIT_DUR * OOK_N_BITS,
+        max((2 ** sf) / LORA_BW * LORA_N_SYMBOLS for sf in LORA_SFS),
+    )
+    steps_cal = round((longest_duration + prop_delay + PROP_TAIL) / dt)
+    sim_cal = AcousticFDTD(
+        n, n, DX, cfl=args.cfl, xp=args.xp,
+        sources=ambient.sources(
+            NOISE_SIGMA_REF, steps_cal, dt, drive_seed=NOISE_DRIVE_SEED,
+        ),
+        damping=edge_sponge((n, n), DX),
+    )
+    cal_writer = out.shot("noise_calibration")
+    frames_cal = cal_writer.open((args.nframes(steps_cal), n, n))
+    mic_p_cal = np.empty(steps_cal, dtype=np.float32)
+    print(f"shot noise_calibration: sigma_ref={NOISE_SIGMA_REF:.1e}, "
+          f"{steps_cal} steps")
+    for i in simargs.progress(steps_cal):
+        sim_cal.step()
+        if i % args.capture_every == 0:
+            frames_cal[i // args.capture_every] = to_numpy(sim_cal.p)
+        mic_p_cal[i] = probe.pressure(sim_cal, RX)
+    v_rx_noise_ref = MIC.filter(mic_p_cal, sim_cal.dt)
+    warmup = int(round(NOISE_CAL_WARMUP_S / sim_cal.dt))
+    noise_power_factor = noise_power_per_unit_sigma_sq(
+        v_rx_noise_ref[warmup:], NOISE_SIGMA_REF,
+    )
+    print(f"  noise power at RX: {noise_power_factor:.3e} V^2 per sigma^2")
+    cal_writer.finish(
+        channels=[Channel("noise mic (V)", kind="scalar",
+                          dt=sim_cal.dt, pos=RX,
+                          values=v_rx_noise_ref.tolist())],
+        extras={
+            "role": "noise_calibration",
+            "sigma_ref": float(NOISE_SIGMA_REF),
+            "noise_power_per_sigma_sq": noise_power_factor,
+        },
+    )
+
     # -- Phase 2: per sigma, run OOK shot + LoRa shots. --
     ook_fn = ook_voltage(FREQ, ook_bits, OOK_BIT_DUR, drive_v=1.0)
 
@@ -356,7 +400,8 @@ def run(args, out):
             v_rx_phys = MIC.filter(mic_p, sim.dt)
             v_rx_model = fir.predict(v_tx)[: len(v_rx_phys)].astype(np.float32)
 
-            sp, np_pow = signal_noise_power(v_rx_phys, v_rx_model)
+            sp = float(np.mean(np.asarray(v_rx_model, dtype=np.float64) ** 2))
+            np_pow = noise_power_factor * sigma * sigma
             s = snr_db(sp, np_pow)
 
             # --- decode pass 1: no sync (naive prop_delay) ---

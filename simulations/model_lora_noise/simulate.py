@@ -25,7 +25,7 @@ import numpy as np
 
 from buddies import channel_model, probe, simargs
 from buddies.devices import Microphone, Speaker
-from buddies.noise import AmbientNoise
+from buddies.noise import AmbientNoise, noise_power_per_unit_sigma_sq
 from buddies.sim import AcousticFDTD, edge_sponge, timestep, to_numpy
 from buddies.store import Channel
 
@@ -65,6 +65,8 @@ NOISE_MARGIN = 0.2  # > default 150 mm sponge depth so noise sources land in the
 # Centred around where OOK transitions from BER 0 to BER ~ 0.5, so both
 # the OOK and CSS curves' transition regions are visible.
 NOISE_SIGMAS = (0.0, 1e-7, 3e-7, 1e-6, 3e-6, 1e-5)
+NOISE_SIGMA_REF = 1e-6
+NOISE_CAL_WARMUP_S = 0.003
 
 
 def linear_chirp(f_lo, f_hi, duration, amplitude=1.0):
@@ -222,10 +224,45 @@ def run(args, out):
     print(f"  expected CSS processing gain over OOK: "
           f"{CSS_PROCESSING_GAIN_DB:+.2f} dB")
 
+    # -- Phase 1b: noise-only calibration (FDTD linearity -> sigma^2 scale). --
+    steps_comm = round((BIT_DUR * N_BITS + prop_delay + PROP_TAIL) / dt)
+    sim_cal = AcousticFDTD(
+        n, n, DX, cfl=args.cfl, xp=args.xp,
+        sources=ambient.sources(
+            NOISE_SIGMA_REF, steps_comm, dt, drive_seed=NOISE_DRIVE_SEED,
+        ),
+        damping=edge_sponge((n, n), DX),
+    )
+    cal_writer = out.shot("noise_calibration")
+    frames_cal = cal_writer.open((args.nframes(steps_comm), n, n))
+    mic_p_cal = np.empty(steps_comm, dtype=np.float32)
+    print(f"shot noise_calibration: sigma_ref={NOISE_SIGMA_REF:.1e}, "
+          f"{steps_comm} steps")
+    for i in simargs.progress(steps_comm):
+        sim_cal.step()
+        if i % args.capture_every == 0:
+            frames_cal[i // args.capture_every] = to_numpy(sim_cal.p)
+        mic_p_cal[i] = probe.pressure(sim_cal, RX)
+    v_rx_noise_ref = MIC.filter(mic_p_cal, sim_cal.dt)
+    warmup = int(round(NOISE_CAL_WARMUP_S / sim_cal.dt))
+    noise_power_factor = noise_power_per_unit_sigma_sq(
+        v_rx_noise_ref[warmup:], NOISE_SIGMA_REF,
+    )
+    print(f"  noise power at RX: {noise_power_factor:.3e} V^2 per sigma^2")
+    cal_writer.finish(
+        channels=[Channel("noise mic (V)", kind="scalar",
+                          dt=sim_cal.dt, pos=RX,
+                          values=v_rx_noise_ref.tolist())],
+        extras={
+            "role": "noise_calibration",
+            "sigma_ref": float(NOISE_SIGMA_REF),
+            "noise_power_per_sigma_sq": noise_power_factor,
+        },
+    )
+
     # -- Phase 2: per sigma, run OOK shot and CSS shot side-by-side. --
     ook_fn = ook_voltage(FREQ, sent_bits, BIT_DUR, drive_v=1.0)
     css_fn = css_voltage(CSS_F_LO, CSS_F_HI, sent_bits, BIT_DUR, drive_v=1.0)
-    steps_comm = round((BIT_DUR * N_BITS + prop_delay + PROP_TAIL) / dt)
 
     comm_writers = {}
     comm_data = {}
@@ -272,7 +309,8 @@ def run(args, out):
             v_rx_phys = MIC.filter(mic_p, sim.dt)
             v_rx_model = fir.predict(v_tx)[: len(v_rx_phys)].astype(np.float32)
 
-            sp, np_pow = signal_noise_power(v_rx_phys, v_rx_model)
+            sp = float(np.mean(np.asarray(v_rx_model, dtype=np.float64) ** 2))
+            np_pow = noise_power_factor * sigma * sigma
             s = snr_db(sp, np_pow)
             bits_p = decoder(v_rx_phys, sim.dt, N_BITS, BIT_DUR, prop_delay)
             bits_m = decoder(v_rx_model, sim.dt, N_BITS, BIT_DUR, prop_delay)

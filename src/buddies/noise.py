@@ -23,11 +23,30 @@ Bring your own model for coloured noise, anisotropy, or a single
 localised interferer; this module's job is the white-noise common case
 on which everything else can be built. The same Source contract every
 other buddies source uses applies: ``sources()`` returns a list ready
-to drop into ``AcousticFDTD(..., sources=[...])``."""
+to drop into ``AcousticFDTD(..., sources=[...])``.
+
+To get an accurate SNR a sim should *measure* the noise floor at the
+receiver rather than estimate it from a phys-vs-model residual (the
+residual conflates noise with surrogate error). Because the FDTD is
+linear, one noise-only shot at a chosen ``sigma_ref`` gives the noise
+power at the RX for any sigma via ``sigma^2 * power_at_unit_sigma``.
+See ``noise_power_per_unit_sigma_sq`` for the trivial helper that does
+the rescaling."""
 
 import numpy as np
 
 from buddies.sim import Source
+
+
+def noise_power_per_unit_sigma_sq(v_rx_at_sigma_ref, sigma_ref):
+    """Convert one noise-only RX trace measured at ``sigma_ref`` into a
+    per-``sigma**2`` coefficient. Noise power at any sigma is then just
+    ``coefficient * sigma ** 2`` -- the FDTD's linearity makes this
+    exact, not an estimate."""
+    if sigma_ref <= 0:
+        raise ValueError(f"sigma_ref must be > 0, got {sigma_ref}")
+    x = np.asarray(v_rx_at_sigma_ref, dtype=np.float64)
+    return float(np.mean(x ** 2)) / (sigma_ref ** 2)
 
 
 class AmbientNoise:

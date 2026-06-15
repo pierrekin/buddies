@@ -31,7 +31,7 @@ import numpy as np
 
 from buddies import channel_model, probe, simargs
 from buddies.devices import Microphone, Speaker
-from buddies.noise import AmbientNoise
+from buddies.noise import AmbientNoise, noise_power_per_unit_sigma_sq
 from buddies.sim import AcousticFDTD, edge_sponge, line, timestep, to_numpy
 from buddies.store import Channel
 
@@ -69,6 +69,8 @@ NOISE_LAYOUT_SEED = 42
 NOISE_DRIVE_SEED = 11
 NOISE_MARGIN = 0.2  # > default 150 mm sponge depth so noise sources land in the fluid
 NOISE_SIGMAS = (0.0, 1e-7, 3e-7, 1e-6, 3e-6, 1e-5, 3e-5)
+NOISE_SIGMA_REF = 1e-6
+NOISE_CAL_WARMUP_S = 0.003
 
 # Look angle for the beamformer. TX is broadside from the array centre.
 LOOK_ANGLE_DEG = 0.0
@@ -218,9 +220,58 @@ def run(args, out):
         print(f"  fitted FIR_RX{j}: training NRMSE = {nr:.4f}")
     train_baseline = float(np.mean(train_nrmses))
 
+    # -- Phase 1b: noise-only calibration at every RX + beamformed composite. --
+    # Multi-RX: each element has its own noise power, and the
+    # delay-and-sum composite of independent noise traces has yet another
+    # (lower, by partial coherence cancellation) power. We measure both
+    # and scale by sigma^2 per pipeline.
+    steps_comm = round((BIT_DUR * N_BITS + prop_delay + PROP_TAIL) / dt)
+    sim_cal = AcousticFDTD(
+        n, n, DX, cfl=args.cfl, xp=args.xp,
+        sources=ambient.sources(
+            NOISE_SIGMA_REF, steps_comm, dt, drive_seed=NOISE_DRIVE_SEED,
+        ),
+        damping=edge_sponge((n, n), DX),
+    )
+    cal_writer = out.shot("noise_calibration")
+    frames_cal = cal_writer.open((args.nframes(steps_comm), n, n))
+    print(f"shot noise_calibration: sigma_ref={NOISE_SIGMA_REF:.1e}, "
+          f"{steps_comm} steps")
+    mic_p_cal = _capture_rx_array(sim_cal, steps_comm, positions, frames_cal, args.capture_every)
+    v_rx_noise_per_rx = [MIC.filter(mic_p_cal[j], sim_cal.dt) for j in range(N_RX)]
+    warmup = int(round(NOISE_CAL_WARMUP_S / sim_cal.dt))
+    noise_power_factor_single = noise_power_per_unit_sigma_sq(
+        v_rx_noise_per_rx[SINGLE_RX_INDEX][warmup:], NOISE_SIGMA_REF,
+    )
+    noise_composite = delay_and_sum(
+        v_rx_noise_per_rx, sim_cal.dt, LOOK_ANGLE_DEG, y_offsets, c,
+    )
+    noise_power_factor_beam = noise_power_per_unit_sigma_sq(
+        noise_composite[warmup:], NOISE_SIGMA_REF,
+    )
+    rx_gain_db = 10.0 * math.log10(noise_power_factor_single / noise_power_factor_beam)
+    print(f"  noise power at e{SINGLE_RX_INDEX}: {noise_power_factor_single:.3e} V^2/sigma^2")
+    print(f"  noise power at beamformed composite: {noise_power_factor_beam:.3e} V^2/sigma^2  "
+          f"(= {rx_gain_db:+.2f} dB RX array gain)")
+    cal_writer.finish(
+        channels=[
+            Channel(f"noise RX e{SINGLE_RX_INDEX} (V)", kind="scalar",
+                    dt=sim_cal.dt, pos=positions[SINGLE_RX_INDEX],
+                    values=v_rx_noise_per_rx[SINGLE_RX_INDEX].tolist()),
+            Channel("noise composite (beamformed) (V)", kind="scalar",
+                    dt=sim_cal.dt, values=noise_composite.astype(np.float32).tolist()),
+        ],
+        extras={
+            "role": "noise_calibration",
+            "sigma_ref": float(NOISE_SIGMA_REF),
+            "noise_power_per_sigma_sq_single": noise_power_factor_single,
+            "noise_power_per_sigma_sq_beam": noise_power_factor_beam,
+            "rx_array_gain_from_noise_db": rx_gain_db,
+        },
+    )
+
     # -- Phase 2: comms with noise, one FDTD run per sigma. --
     ook_fn = ook_voltage(FREQ, sent_bits, BIT_DUR, drive_v=1.0)
-    steps_comm = round((BIT_DUR * N_BITS + prop_delay + PROP_TAIL) / dt)
 
     comm_writers = {}
     comm_data = {}
@@ -260,7 +311,8 @@ def run(args, out):
         # ---- pipeline: single element ----
         v_phys_single = v_rx_phys[SINGLE_RX_INDEX]
         v_model_single = v_rx_model[SINGLE_RX_INDEX]
-        sp_s, np_s = signal_noise_power(v_phys_single, v_model_single)
+        sp_s = float(np.mean(np.asarray(v_model_single, dtype=np.float64) ** 2))
+        np_s = noise_power_factor_single * sigma * sigma
         snr_single_db = snr_db(sp_s, np_s)
         bits_p_single, _, _ = decode(v_phys_single, sim.dt, N_BITS, BIT_DUR, prop_delay)
         bits_m_single, _, _ = decode(v_model_single, sim.dt, N_BITS, BIT_DUR, prop_delay)
@@ -275,7 +327,8 @@ def run(args, out):
         comp_model = delay_and_sum(
             v_rx_model, sim.dt, LOOK_ANGLE_DEG, y_offsets, c,
         ).astype(np.float32)
-        sp_b, np_b = signal_noise_power(comp_phys, comp_model)
+        sp_b = float(np.mean(np.asarray(comp_model, dtype=np.float64) ** 2))
+        np_b = noise_power_factor_beam * sigma * sigma
         snr_beam_db = snr_db(sp_b, np_b)
         bits_p_beam, _, _ = decode(comp_phys, sim.dt, N_BITS, BIT_DUR, prop_delay)
         bits_m_beam, _, _ = decode(comp_model, sim.dt, N_BITS, BIT_DUR, prop_delay)

@@ -26,7 +26,7 @@ import numpy as np
 
 from buddies import channel_model, probe, simargs
 from buddies.devices import Microphone, Speaker
-from buddies.noise import AmbientNoise
+from buddies.noise import AmbientNoise, noise_power_per_unit_sigma_sq
 from buddies.sim import AcousticFDTD, edge_sponge, line, timestep, to_numpy
 from buddies.store import Channel
 
@@ -67,6 +67,8 @@ NOISE_LAYOUT_SEED = 42
 NOISE_DRIVE_SEED = 11
 NOISE_MARGIN = 0.2  # > default 150 mm sponge depth so noise sources land in the fluid
 NOISE_SIGMAS = (0.0, 1e-7, 3e-7, 1e-6, 3e-6, 1e-5, 3e-5)
+NOISE_SIGMA_REF = 1e-6
+NOISE_CAL_WARMUP_S = 0.005  # 2 m tank: prop delay alone is ~1 ms
 
 
 def linear_chirp(f_lo, f_hi, duration, amplitude=1.0):
@@ -227,10 +229,62 @@ def run(args, out):
         char_shot("char_b", TX_B)
     baseline = float(np.mean(train_a + train_b))
 
+    # -- Phase 1b: noise-only calibration. Measure at every RX element,
+    # plus the beamformed composite at each look angle (a and b). All
+    # three noise floors scale with sigma^2 by FDTD linearity. --
+    steps_comm = round((BIT_DUR * N_BITS + prop_delay + PROP_TAIL) / dt)
+    sim_cal = AcousticFDTD(
+        n, n, DX, cfl=args.cfl, xp=args.xp,
+        sources=ambient.sources(
+            NOISE_SIGMA_REF, steps_comm, dt, drive_seed=NOISE_DRIVE_SEED,
+        ),
+        damping=edge_sponge((n, n), DX),
+    )
+    cal_writer = out.shot("noise_calibration")
+    frames_cal = cal_writer.open((args.nframes(steps_comm), n, n))
+    print(f"shot noise_calibration: sigma_ref={NOISE_SIGMA_REF:.1e}, "
+          f"{steps_comm} steps")
+    mic_p_cal = _capture_rx(sim_cal, steps_comm, positions, frames_cal, args.capture_every)
+    v_rx_noise_per_rx = [MIC.filter(mic_p_cal[j], sim_cal.dt) for j in range(N_RX)]
+    warmup = int(round(NOISE_CAL_WARMUP_S / sim_cal.dt))
+    noise_power_factor_single = noise_power_per_unit_sigma_sq(
+        v_rx_noise_per_rx[SINGLE_RX_INDEX][warmup:], NOISE_SIGMA_REF,
+    )
+    noise_comp_a_ref = delay_and_sum(v_rx_noise_per_rx, sim_cal.dt, look_a, y_offsets, c)
+    noise_comp_b_ref = delay_and_sum(v_rx_noise_per_rx, sim_cal.dt, look_b, y_offsets, c)
+    noise_power_factor_beam_a = noise_power_per_unit_sigma_sq(
+        noise_comp_a_ref[warmup:], NOISE_SIGMA_REF,
+    )
+    noise_power_factor_beam_b = noise_power_per_unit_sigma_sq(
+        noise_comp_b_ref[warmup:], NOISE_SIGMA_REF,
+    )
+    print(f"  noise power at e{SINGLE_RX_INDEX}: {noise_power_factor_single:.3e}")
+    print(f"  noise power at beamformed look_a: {noise_power_factor_beam_a:.3e}")
+    print(f"  noise power at beamformed look_b: {noise_power_factor_beam_b:.3e}")
+    cal_writer.finish(
+        channels=[
+            Channel(f"noise RX e{SINGLE_RX_INDEX} (V)", kind="scalar",
+                    dt=sim_cal.dt, pos=positions[SINGLE_RX_INDEX],
+                    values=v_rx_noise_per_rx[SINGLE_RX_INDEX].tolist()),
+            Channel("noise composite look_a (V)", kind="scalar",
+                    dt=sim_cal.dt,
+                    values=noise_comp_a_ref.astype(np.float32).tolist()),
+            Channel("noise composite look_b (V)", kind="scalar",
+                    dt=sim_cal.dt,
+                    values=noise_comp_b_ref.astype(np.float32).tolist()),
+        ],
+        extras={
+            "role": "noise_calibration",
+            "sigma_ref": float(NOISE_SIGMA_REF),
+            "noise_power_per_sigma_sq_single": noise_power_factor_single,
+            "noise_power_per_sigma_sq_beam_a": noise_power_factor_beam_a,
+            "noise_power_per_sigma_sq_beam_b": noise_power_factor_beam_b,
+        },
+    )
+
     # -- Phase 2: joint TX_A + TX_B + ambient noise sweep. --
     ook_a = ook_voltage(FREQ, bits_a, BIT_DUR)
     ook_b = ook_voltage(FREQ, bits_b, BIT_DUR)
-    steps_comm = round((BIT_DUR * N_BITS + prop_delay + PROP_TAIL) / dt)
 
     comm_writers = {}
     comm_data = {}
@@ -293,19 +347,18 @@ def run(args, out):
         comp_signal_b_at_a = delay_and_sum(signal_b_per_rx, sim.dt, look_a, y_offsets, c).astype(np.float32)
         comp_signal_a_at_b = delay_and_sum(signal_a_per_rx, sim.dt, look_b, y_offsets, c).astype(np.float32)
         comp_signal_b_at_b = delay_and_sum(signal_b_per_rx, sim.dt, look_b, y_offsets, c).astype(np.float32)
-        # Noise estimate at each composite = phys composite - sum of signal composites
-        noise_comp_at_a = comp_phys_a - comp_signal_a_at_a - comp_signal_b_at_a
-        noise_comp_at_b = comp_phys_b - comp_signal_a_at_b - comp_signal_b_at_b
+        # Calibrated noise power per pipeline -- exact via FDTD linearity.
+        pow_noise_a = noise_power_factor_beam_a * sigma * sigma
+        pow_noise_b = noise_power_factor_beam_b * sigma * sigma
+        pow_noise_single = noise_power_factor_single * sigma * sigma
 
         # SINR for each beamformed pipeline.
         pow_sig_a_at_a = float(np.mean(comp_signal_a_at_a.astype(np.float64) ** 2))
         pow_sig_b_at_a = float(np.mean(comp_signal_b_at_a.astype(np.float64) ** 2))
-        pow_noise_a = float(np.mean(noise_comp_at_a.astype(np.float64) ** 2))
         sinr_a_beam = sinr_db(pow_sig_a_at_a, pow_sig_b_at_a, pow_noise_a)
 
         pow_sig_b_at_b = float(np.mean(comp_signal_b_at_b.astype(np.float64) ** 2))
         pow_sig_a_at_b = float(np.mean(comp_signal_a_at_b.astype(np.float64) ** 2))
-        pow_noise_b = float(np.mean(noise_comp_at_b.astype(np.float64) ** 2))
         sinr_b_beam = sinr_db(pow_sig_b_at_b, pow_sig_a_at_b, pow_noise_b)
 
         # Single-element decode (no demix): centre RX.
@@ -313,10 +366,8 @@ def run(args, out):
         v_phys_single = v_rx_phys[ce]
         sig_a_single = signal_a_per_rx[ce]
         sig_b_single = signal_b_per_rx[ce]
-        noise_single = v_phys_single - sig_a_single - sig_b_single
         pow_sig_a_single = float(np.mean(sig_a_single.astype(np.float64) ** 2))
         pow_sig_b_single = float(np.mean(sig_b_single.astype(np.float64) ** 2))
-        pow_noise_single = float(np.mean(noise_single.astype(np.float64) ** 2))
         sinr_a_single = sinr_db(pow_sig_a_single, pow_sig_b_single, pow_noise_single)
         sinr_b_single = sinr_db(pow_sig_b_single, pow_sig_a_single, pow_noise_single)
 
