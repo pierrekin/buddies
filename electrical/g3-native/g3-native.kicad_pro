@@ -488,7 +488,7 @@
     "pinned_symbol_libs": []
   },
   "meta": {
-    "filename": "buddies.kicad_pro",
+    "filename": "g3-native.kicad_pro",
     "version": 3
   },
   "net_settings": {
@@ -685,18 +685,18 @@
     "subpart_id_separator": 0,
     "top_level_sheets": [
       {
-        "filename": "buddies.kicad_sch",
-        "name": "buddies",
+        "filename": "g3-native.kicad_sch",
+        "name": "g3-native",
         "uuid": "548b07b9-6c48-4439-80fb-76eb480af250"
       }
     ],
-    "used_designators": "F1,U2-3,J1-2,R1-3,C16,C28-33,SW1-2,#PWR23-35",
+    "used_designators": "",
     "variants": []
   },
   "sheets": [
     [
       "548b07b9-6c48-4439-80fb-76eb480af250",
-      "buddies"
+      "g3-native"
     ]
   ],
   "text_variables": {},

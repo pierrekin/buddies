@@ -5370,7 +5370,7 @@
 			)
 			(embedded_fonts no)
 		)
-		(symbol "My Parts:C_100nF_X7R_0402"
+		(symbol "Buddies:C_100nF_X7R_0402"
 			(pin_numbers
 				(hide yes)
 			)
@@ -5547,7 +5547,7 @@
 			)
 			(embedded_fonts no)
 		)
-		(symbol "My Parts:C_10uF_X7R_0805"
+		(symbol "Buddies:C_10uF_X7R_0805"
 			(pin_numbers
 				(hide yes)
 			)
@@ -10584,7 +10584,7 @@
 			(uuid "fb2025bf-76e5-47eb-a5eb-41b73319a5e2")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "FB1")
 					(unit 1)
@@ -10662,7 +10662,7 @@
 			(uuid "9a6a817e-543a-4ec1-badc-1699d3ca5dda")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "#PWR013")
 					(unit 1)
@@ -10744,7 +10744,7 @@
 			(uuid "42eca470-d9c7-4efe-9209-54c56c3a99db")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "C32")
 					(unit 1)
@@ -10822,7 +10822,7 @@
 			(uuid "f8eae670-89ab-49c6-96d3-d4d19311f09e")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "#PWR024")
 					(unit 1)
@@ -10916,7 +10916,7 @@
 			(uuid "4e95bf39-629a-4995-9b2a-9571d439b8b9")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "F1")
 					(unit 1)
@@ -10925,7 +10925,7 @@
 		)
 	)
 	(symbol
-		(lib_id "My Parts:C_100nF_X7R_0402")
+		(lib_id "Buddies:C_100nF_X7R_0402")
 		(at 243.84 53.34 0)
 		(unit 1)
 		(body_style 1)
@@ -11020,7 +11020,7 @@
 			(uuid "3902e76b-fb6c-4310-b18d-5505858ad0c1")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "C24")
 					(unit 1)
@@ -11029,7 +11029,7 @@
 		)
 	)
 	(symbol
-		(lib_id "My Parts:C_100nF_X7R_0402")
+		(lib_id "Buddies:C_100nF_X7R_0402")
 		(at 190.5 53.34 0)
 		(unit 1)
 		(body_style 1)
@@ -11124,7 +11124,7 @@
 			(uuid "17891c4f-326e-45a7-8666-0c571ddd76c2")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "C21")
 					(unit 1)
@@ -11202,7 +11202,7 @@
 			(uuid "a74b2f72-0aba-4ffc-9e47-ce8735b4cb6b")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "#PWR07")
 					(unit 1)
@@ -11284,7 +11284,7 @@
 			(uuid "bef3bfbb-084d-4e24-94f1-842c4b078725")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "SW2")
 					(unit 1)
@@ -11293,7 +11293,7 @@
 		)
 	)
 	(symbol
-		(lib_id "My Parts:C_100nF_X7R_0402")
+		(lib_id "Buddies:C_100nF_X7R_0402")
 		(at 354.33 119.38 0)
 		(unit 1)
 		(body_style 1)
@@ -11388,7 +11388,7 @@
 			(uuid "e18bb709-8f1e-4e8d-b84f-73cb623ddf4a")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "C14")
 					(unit 1)
@@ -11466,7 +11466,7 @@
 			(uuid "fb164183-ef68-480f-a065-b21f3ba185e3")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "#PWR010")
 					(unit 1)
@@ -11475,7 +11475,7 @@
 		)
 	)
 	(symbol
-		(lib_id "My Parts:C_100nF_X7R_0402")
+		(lib_id "Buddies:C_100nF_X7R_0402")
 		(at 58.42 83.82 0)
 		(unit 1)
 		(body_style 1)
@@ -11570,7 +11570,7 @@
 			(uuid "f03380c7-43dc-4e54-9cf4-74d8cecde6e9")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "C20")
 					(unit 1)
@@ -11648,7 +11648,7 @@
 			(uuid "c4754a8e-0f5e-4119-855c-01dfa84d7085")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "#PWR030")
 					(unit 1)
@@ -11726,7 +11726,7 @@
 			(uuid "0d909bd3-dd41-4e80-b1c2-70f997c7ea1b")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "#PWR019")
 					(unit 1)
@@ -11735,7 +11735,7 @@
 		)
 	)
 	(symbol
-		(lib_id "My Parts:C_100nF_X7R_0402")
+		(lib_id "Buddies:C_100nF_X7R_0402")
 		(at 328.93 119.38 0)
 		(unit 1)
 		(body_style 1)
@@ -11830,7 +11830,7 @@
 			(uuid "21296339-2a4d-4a0a-bbdc-aaafd9cc1bb1")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "C12")
 					(unit 1)
@@ -11908,7 +11908,7 @@
 			(uuid "93d5b32b-4697-4051-8531-0e467e3d1ea9")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "#PWR016")
 					(unit 1)
@@ -11997,7 +11997,7 @@
 			(uuid "e15349fd-1fe7-4cb4-af25-fe0ca39118f8")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "U3")
 					(unit 1)
@@ -12075,7 +12075,7 @@
 			(uuid "8c65e0dc-9fc4-43bd-883a-a5a7f4a014c6")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "#PWR026")
 					(unit 1)
@@ -12153,7 +12153,7 @@
 			(uuid "af258dab-547f-4b6b-bb7e-28cb773132a1")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "#PWR035")
 					(unit 1)
@@ -12231,7 +12231,7 @@
 			(uuid "9ce1b4e8-5409-4c05-913b-7fc5736301f0")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "#PWR012")
 					(unit 1)
@@ -12309,7 +12309,7 @@
 			(uuid "5bf00829-b708-4f5c-8dd8-f6d0de404f87")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "#PWR020")
 					(unit 1)
@@ -12387,7 +12387,7 @@
 			(uuid "6fb8aec2-344f-4fab-a074-5faed42053f2")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "#PWR034")
 					(unit 1)
@@ -12465,7 +12465,7 @@
 			(uuid "ff84f85a-9622-4f67-9242-4ed84df592dd")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "#PWR09")
 					(unit 1)
@@ -12474,7 +12474,7 @@
 		)
 	)
 	(symbol
-		(lib_id "My Parts:C_100nF_X7R_0402")
+		(lib_id "Buddies:C_100nF_X7R_0402")
 		(at 203.2 53.34 0)
 		(unit 1)
 		(body_style 1)
@@ -12569,7 +12569,7 @@
 			(uuid "99aa4906-358d-4111-9a3e-200f90b1714e")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "C22")
 					(unit 1)
@@ -12651,7 +12651,7 @@
 			(uuid "65536129-ac01-44ae-a325-543130d200a7")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "R1")
 					(unit 1)
@@ -12733,7 +12733,7 @@
 			(uuid "eb38fee2-a67f-41c0-bc49-4bec10090b38")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "SW1")
 					(unit 1)
@@ -12815,7 +12815,7 @@
 			(uuid "f3a2e3e5-d088-40c4-b4c9-c6b0c3d69669")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "R3")
 					(unit 1)
@@ -12893,7 +12893,7 @@
 			(uuid "e5c4b3f8-88a4-45a1-be0b-f5dc488591ae")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "#PWR015")
 					(unit 1)
@@ -12902,7 +12902,7 @@
 		)
 	)
 	(symbol
-		(lib_id "My Parts:C_100nF_X7R_0402")
+		(lib_id "Buddies:C_100nF_X7R_0402")
 		(at 290.83 119.38 0)
 		(unit 1)
 		(body_style 1)
@@ -12997,7 +12997,7 @@
 			(uuid "b1134bbe-3afe-4baa-adc3-95a802020910")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "C9")
 					(unit 1)
@@ -13075,7 +13075,7 @@
 			(uuid "a8acbf55-b13d-4c8b-81e3-3ab0cadf50b7")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "#PWR027")
 					(unit 1)
@@ -13153,7 +13153,7 @@
 			(uuid "0bfff050-46cb-498b-a1b6-019c03aa88cb")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "#PWR029")
 					(unit 1)
@@ -13162,7 +13162,7 @@
 		)
 	)
 	(symbol
-		(lib_id "My Parts:C_10uF_X7R_0805")
+		(lib_id "Buddies:C_10uF_X7R_0805")
 		(at 189.23 119.38 0)
 		(unit 1)
 		(body_style 1)
@@ -13257,7 +13257,7 @@
 			(uuid "f1103e86-5324-4ef2-90e1-53ec965456a3")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "C1")
 					(unit 1)
@@ -13335,7 +13335,7 @@
 			(uuid "2e450c08-2a9b-4cb4-8617-df927daa4217")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "#PWR017")
 					(unit 1)
@@ -13413,7 +13413,7 @@
 			(uuid "1b08215b-e298-47aa-97db-29aedb013272")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "#PWR06")
 					(unit 1)
@@ -13495,7 +13495,7 @@
 			(uuid "d6a2ba10-f41b-4b6f-bb1f-9417f0434bb3")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "C31")
 					(unit 1)
@@ -13599,7 +13599,7 @@
 			(uuid "4c508ccc-2c91-4689-9d4a-7d9dec9157ba")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "C26")
 					(unit 1)
@@ -13608,7 +13608,7 @@
 		)
 	)
 	(symbol
-		(lib_id "My Parts:C_100nF_X7R_0402")
+		(lib_id "Buddies:C_100nF_X7R_0402")
 		(at 215.9 53.34 0)
 		(unit 1)
 		(body_style 1)
@@ -13703,7 +13703,7 @@
 			(uuid "44f93e81-1837-4b04-838d-aa33a764a8ad")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "C23")
 					(unit 1)
@@ -13712,7 +13712,7 @@
 		)
 	)
 	(symbol
-		(lib_id "My Parts:C_100nF_X7R_0402")
+		(lib_id "Buddies:C_100nF_X7R_0402")
 		(at 278.13 119.38 0)
 		(unit 1)
 		(body_style 1)
@@ -13807,7 +13807,7 @@
 			(uuid "5b9c0222-612c-438b-860b-2333845d1ba9")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "C8")
 					(unit 1)
@@ -13816,7 +13816,7 @@
 		)
 	)
 	(symbol
-		(lib_id "My Parts:C_100nF_X7R_0402")
+		(lib_id "Buddies:C_100nF_X7R_0402")
 		(at 223.52 166.37 0)
 		(unit 1)
 		(body_style 1)
@@ -13911,7 +13911,7 @@
 			(uuid "48bdaba0-6b6e-4b4e-924e-6a4649807f11")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "C18")
 					(unit 1)
@@ -14015,7 +14015,7 @@
 			(uuid "9c1ced70-ad01-4930-a018-9044be05c86d")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "C25")
 					(unit 1)
@@ -14097,7 +14097,7 @@
 			(uuid "0a31b450-1470-47fc-a13b-06b0477e63a8")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "C19")
 					(unit 1)
@@ -14106,7 +14106,7 @@
 		)
 	)
 	(symbol
-		(lib_id "My Parts:C_100nF_X7R_0402")
+		(lib_id "Buddies:C_100nF_X7R_0402")
 		(at 214.63 119.38 0)
 		(unit 1)
 		(body_style 1)
@@ -14201,7 +14201,7 @@
 			(uuid "d3dffe61-436b-4269-ace1-b93c52b6ec33")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "C3")
 					(unit 1)
@@ -14279,7 +14279,7 @@
 			(uuid "463274b6-4e0b-4852-b89d-4c48d982b2f3")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "#PWR021")
 					(unit 1)
@@ -14288,7 +14288,7 @@
 		)
 	)
 	(symbol
-		(lib_id "My Parts:C_10uF_X7R_0805")
+		(lib_id "Buddies:C_10uF_X7R_0805")
 		(at 201.93 119.38 0)
 		(unit 1)
 		(body_style 1)
@@ -14383,7 +14383,7 @@
 			(uuid "e5f7e753-edbe-4e2e-90c2-c26a97b1db9b")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "C2")
 					(unit 1)
@@ -14392,7 +14392,7 @@
 		)
 	)
 	(symbol
-		(lib_id "My Parts:C_100nF_X7R_0402")
+		(lib_id "Buddies:C_100nF_X7R_0402")
 		(at 367.03 119.38 0)
 		(unit 1)
 		(body_style 1)
@@ -14487,7 +14487,7 @@
 			(uuid "67efa561-062c-4342-9902-26c020550819")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "C15")
 					(unit 1)
@@ -14565,7 +14565,7 @@
 			(uuid "8b2c8c0d-c899-4c1e-804a-673ab0840e04")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "#PWR033")
 					(unit 1)
@@ -14574,7 +14574,7 @@
 		)
 	)
 	(symbol
-		(lib_id "My Parts:C_100nF_X7R_0402")
+		(lib_id "Buddies:C_100nF_X7R_0402")
 		(at 303.53 119.38 0)
 		(unit 1)
 		(body_style 1)
@@ -14669,7 +14669,7 @@
 			(uuid "9d57d1f8-4b10-4617-87ab-3698d37109f1")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "C10")
 					(unit 1)
@@ -14751,7 +14751,7 @@
 			(uuid "dbe03843-422f-442b-9c12-fca5b26d84a8")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "C30")
 					(unit 1)
@@ -14833,7 +14833,7 @@
 			(uuid "950cbcb3-efff-45f1-8944-0ce8e284e2d3")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "C17")
 					(unit 1)
@@ -14937,7 +14937,7 @@
 			(uuid "1a6c38bf-c856-449c-b971-e62a52c62c5f")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "C27")
 					(unit 1)
@@ -15015,7 +15015,7 @@
 			(uuid "30b715be-1d3b-4884-aece-0a6f14e1b52b")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "#PWR031")
 					(unit 1)
@@ -15097,7 +15097,7 @@
 			(uuid "bbb600f5-9241-46a3-8e1f-b5f785636dfd")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "C28")
 					(unit 1)
@@ -15194,7 +15194,7 @@
 			(uuid "94a75627-cc40-4198-b7e4-4fb8517cd876")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "U2")
 					(unit 1)
@@ -15272,7 +15272,7 @@
 			(uuid "bab56903-61e5-4fdd-8fd2-013cd3474bd7")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "#PWR014")
 					(unit 1)
@@ -15350,7 +15350,7 @@
 			(uuid "7134168a-84d6-4f4f-a0f7-5c8027ff97dd")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "#PWR018")
 					(unit 1)
@@ -15359,7 +15359,7 @@
 		)
 	)
 	(symbol
-		(lib_id "My Parts:C_100nF_X7R_0402")
+		(lib_id "Buddies:C_100nF_X7R_0402")
 		(at 316.23 119.38 0)
 		(unit 1)
 		(body_style 1)
@@ -15454,7 +15454,7 @@
 			(uuid "a420444d-1779-4a01-ad32-721b8e98b18c")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "C11")
 					(unit 1)
@@ -15463,7 +15463,7 @@
 		)
 	)
 	(symbol
-		(lib_id "My Parts:C_100nF_X7R_0402")
+		(lib_id "Buddies:C_100nF_X7R_0402")
 		(at 252.73 119.38 0)
 		(unit 1)
 		(body_style 1)
@@ -15558,7 +15558,7 @@
 			(uuid "da94ffde-11a9-4128-8f59-f0ed8b741e50")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "C6")
 					(unit 1)
@@ -15636,7 +15636,7 @@
 			(uuid "b9d3ccc4-bb39-411e-a98a-19bc3ca4a9df")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "#PWR08")
 					(unit 1)
@@ -15714,7 +15714,7 @@
 			(uuid "990a315d-9b9a-46d5-8971-6aec733c727e")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "#PWR01")
 					(unit 1)
@@ -15792,7 +15792,7 @@
 			(uuid "b6865fa9-47e8-41aa-9b9a-d7daea10c1d0")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "#PWR03")
 					(unit 1)
@@ -15801,7 +15801,7 @@
 		)
 	)
 	(symbol
-		(lib_id "My Parts:C_100nF_X7R_0402")
+		(lib_id "Buddies:C_100nF_X7R_0402")
 		(at 341.63 119.38 0)
 		(unit 1)
 		(body_style 1)
@@ -15895,7 +15895,7 @@
 			(uuid "33e7c0b9-1142-4319-a9f6-8a74db8b1163")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "C13")
 					(unit 1)
@@ -15973,7 +15973,7 @@
 			(uuid "c782b52c-8799-4139-aa82-b90e87a99106")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "#PWR02")
 					(unit 1)
@@ -15982,7 +15982,7 @@
 		)
 	)
 	(symbol
-		(lib_id "My Parts:C_100nF_X7R_0402")
+		(lib_id "Buddies:C_100nF_X7R_0402")
 		(at 266.7 160.02 0)
 		(unit 1)
 		(body_style 1)
@@ -16077,7 +16077,7 @@
 			(uuid "e4f1fc35-794e-4896-b3e4-a9c803aa7503")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "C16")
 					(unit 1)
@@ -16159,7 +16159,7 @@
 			(uuid "58e3a649-5a6b-4fc2-9c9e-5a56c098849f")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "R2")
 					(unit 1)
@@ -16237,7 +16237,7 @@
 			(uuid "d2223b3e-1304-4b39-bc60-eb4f7ae590df")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "#PWR028")
 					(unit 1)
@@ -16246,7 +16246,7 @@
 		)
 	)
 	(symbol
-		(lib_id "My Parts:C_100nF_X7R_0402")
+		(lib_id "Buddies:C_100nF_X7R_0402")
 		(at 293.37 52.07 0)
 		(unit 1)
 		(body_style 1)
@@ -16341,7 +16341,7 @@
 			(uuid "3fa35dd4-d2d2-43e8-8c1d-bab746ec5204")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "C29")
 					(unit 1)
@@ -16419,7 +16419,7 @@
 			(uuid "d0b7dabb-24f4-4009-9a34-9ef104385561")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "#PWR025")
 					(unit 1)
@@ -16428,7 +16428,7 @@
 		)
 	)
 	(symbol
-		(lib_id "My Parts:C_100nF_X7R_0402")
+		(lib_id "Buddies:C_100nF_X7R_0402")
 		(at 265.43 119.38 0)
 		(unit 1)
 		(body_style 1)
@@ -16523,7 +16523,7 @@
 			(uuid "fbab489e-397d-4add-a3c2-c75e22a70d62")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "C7")
 					(unit 1)
@@ -16601,7 +16601,7 @@
 			(uuid "3deb3bf2-3394-4baa-ab0a-de287af31428")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "#PWR022")
 					(unit 1)
@@ -16610,7 +16610,7 @@
 		)
 	)
 	(symbol
-		(lib_id "My Parts:C_100nF_X7R_0402")
+		(lib_id "Buddies:C_100nF_X7R_0402")
 		(at 240.03 119.38 0)
 		(unit 1)
 		(body_style 1)
@@ -16705,7 +16705,7 @@
 			(uuid "cb76ea0c-ec37-4741-8bde-a47ae3e669bc")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "C5")
 					(unit 1)
@@ -16822,7 +16822,7 @@
 			(uuid "0cb66221-6941-4b1c-80d2-b31b37c84bd9")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "J2")
 					(unit 1)
@@ -16958,7 +16958,7 @@
 			(uuid "537f6fee-83f0-4b2e-ad2c-ec94ce0a2615")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "J1")
 					(unit 1)
@@ -17036,7 +17036,7 @@
 			(uuid "a0c73d86-922e-4ad3-bf7f-fa271558330c")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "#PWR023")
 					(unit 1)
@@ -17045,7 +17045,7 @@
 		)
 	)
 	(symbol
-		(lib_id "My Parts:C_100nF_X7R_0402")
+		(lib_id "Buddies:C_100nF_X7R_0402")
 		(at 227.33 119.38 0)
 		(unit 1)
 		(body_style 1)
@@ -17140,7 +17140,7 @@
 			(uuid "bcd1af20-485c-416e-9ccb-3c32c1acc7e7")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "C4")
 					(unit 1)
@@ -17671,7 +17671,7 @@
 			(uuid "11843b51-762e-4068-b772-87cbf4fc74f1")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "U1")
 					(unit 1)
@@ -17749,7 +17749,7 @@
 			(uuid "9ac9ee2b-0307-48af-87e3-0e809821f68b")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "#PWR011")
 					(unit 1)
@@ -17827,7 +17827,7 @@
 			(uuid "ac333663-4acf-405d-b55a-34c8bd00a940")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "#PWR05")
 					(unit 1)
@@ -17905,7 +17905,7 @@
 			(uuid "1287263f-d2c4-4425-b890-63b64af5d0e5")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "#PWR032")
 					(unit 1)
@@ -17983,7 +17983,7 @@
 			(uuid "fcd7bb49-d736-4a14-b93e-61f23408e5d9")
 		)
 		(instances
-			(project "buddies"
+			(project "g3-native"
 				(path "/548b07b9-6c48-4439-80fb-76eb480af250"
 					(reference "#PWR04")
 					(unit 1)
