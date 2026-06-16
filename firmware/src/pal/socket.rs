@@ -2,6 +2,8 @@ use core::fmt::Write;
 
 use cortex_m_semihosting::hprintln;
 
+use crate::peers::{Peer, PeerLocator};
+
 use super::uart::Uart0;
 use super::{Rgb, RgbStrip};
 
@@ -36,6 +38,47 @@ impl RgbStrip for SocketStrip {
         }
         let _ = writeln!(w);
     }
+}
+
+impl PeerLocator for SocketStrip {
+    fn scan(&mut self) -> Option<Peer> {
+        for &b in b"scan\n" {
+            self.uart.write_byte(b);
+        }
+        let mut buf = [0u8; 96];
+        let n = read_line(&mut self.uart, &mut buf);
+        parse_peer_response(&buf[..n])
+    }
+}
+
+fn read_line(uart: &mut Uart0, buf: &mut [u8]) -> usize {
+    let mut len = 0;
+    loop {
+        let b = uart.read_byte_blocking();
+        if b == b'\n' {
+            return len;
+        }
+        if len < buf.len() {
+            buf[len] = b;
+            len += 1;
+        }
+    }
+}
+
+fn parse_peer_response(line: &[u8]) -> Option<Peer> {
+    let s = core::str::from_utf8(line).ok()?;
+    let mut parts = s.split_whitespace();
+    if parts.next()? != "peer" {
+        return None;
+    }
+    let first = parts.next()?;
+    if first == "none" {
+        return None;
+    }
+    let id = first.parse::<u8>().ok()?;
+    let bearing_deg = parts.next()?.parse::<f32>().ok()?;
+    let range_m = parts.next()?.parse::<f32>().ok()?;
+    Some(Peer { id, bearing_deg, range_m })
 }
 
 struct ByteSink<'a> {

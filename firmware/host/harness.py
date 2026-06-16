@@ -390,9 +390,15 @@ class HarnessServer(QObject):
 
     def _parse_line(self, buddy: Buddy, line: str) -> None:
         parts = line.strip().split()
-        if not parts or parts[0] != "strip":
+        if not parts:
             return
-        values = parts[1:]
+        cmd = parts[0]
+        if cmd == "strip":
+            self._handle_strip(buddy, parts[1:])
+        elif cmd == "scan":
+            self._handle_scan(buddy)
+
+    def _handle_strip(self, buddy: Buddy, values: list[str]) -> None:
         if len(values) % 3 != 0:
             return
         triples = list(zip(values[::3], values[1::3], values[2::3]))
@@ -401,6 +407,35 @@ class HarnessServer(QObject):
         except ValueError:
             return
         self._world.updated(buddy)
+
+    def _handle_scan(self, buddy: Buddy) -> None:
+        target = self._find_target(buddy)
+        if target is None:
+            buddy.socket.write(b"peer none\n")
+            return
+        bearing, range_m = self._compute_body_bearing_range(buddy, target)
+        line = f"peer {target.id} {bearing:.2f} {range_m:.3f}\n"
+        buddy.socket.write(line.encode("ascii"))
+
+    def _find_target(self, buddy: Buddy) -> Buddy | None:
+        other_ids = sorted(b.id for b in self._world.buddies if b.id != buddy.id)
+        if not other_ids:
+            return None
+        higher = [i for i in other_ids if i > buddy.id]
+        target_id = higher[0] if higher else other_ids[0]
+        return next(
+            (b for b in self._world.buddies if b.id == target_id), None
+        )
+
+    def _compute_body_bearing_range(
+        self, viewer: Buddy, target: Buddy
+    ) -> tuple[float, float]:
+        dx = target.x - viewer.x
+        dy = target.y - viewer.y
+        range_m = math.hypot(dx, dy)
+        world_bearing = math.degrees(math.atan2(dx, dy)) % 360
+        body_bearing = ((world_bearing - viewer.heading_deg + 180) % 360) - 180
+        return body_bearing, range_m
 
     def _on_disconnect(self, buddy: Buddy) -> None:
         self._world.remove(buddy)
