@@ -5,7 +5,11 @@ clients (QEMU `-chardev socket,...,reconnect-ms=...`). Single window:
 world view on top, one row per connected device below.
 
 Usage (from `firmware/`):
-    uv run --project host host/harness.py
+    uv run --project host host/harness.py [N]
+
+`N` is the number of devices to expect; connected buddies are spread evenly
+around a ring and aimed at the world origin. Omit it for the unarranged
+fallback layout.
 """
 
 from __future__ import annotations
@@ -34,6 +38,8 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMainWindow,
+    QSizePolicy,
+    QSplitter,
     QVBoxLayout,
     QWidget,
 )
@@ -205,7 +211,13 @@ class WorldView(QWidget):
     def __init__(self, world: World) -> None:
         super().__init__()
         self._world = world
-        self.setFixedSize(WORLD_PX, WORLD_PX)
+        # The splitter handle resizes this pane, so grow to fill it rather
+        # than locking to a fixed square. paintEvent already centres on the
+        # live widget size.
+        self.setMinimumSize(WORLD_PX, WORLD_PX)
+        self.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
         self.setStyleSheet(
             "background-color: #0a1a2a; "
             "border: 1px solid #2a3a4a; "
@@ -226,19 +238,25 @@ class WorldView(QWidget):
 
         cx = self.width() / 2.0
         cy = self.height() / 2.0
-        scale = WORLD_PX_PER_M
+        scale = self._scale()
         half = WORLD_EXTENT_M / 2.0
+        # World-square bounds; grid lines stay within these so a larger
+        # viewport scales the grid up rather than spilling lines past it.
+        left = cx - half * scale
+        right = cx + half * scale
+        top = cy - half * scale
+        bottom = cy + half * scale
 
         p.setPen(QPen(QColor(255, 255, 255, 25), 1))
         x = -half
         while x <= half + 1e-6:
             sx = cx + x * scale
-            p.drawLine(int(sx), 0, int(sx), self.height())
+            p.drawLine(int(sx), int(top), int(sx), int(bottom))
             x += 0.5
         y = -half
         while y <= half + 1e-6:
             sy = cy - y * scale
-            p.drawLine(0, int(sy), self.width(), int(sy))
+            p.drawLine(int(left), int(sy), int(right), int(sy))
             y += 0.5
 
         p.setPen(QPen(QColor(255, 255, 255, 80), 1))
@@ -301,20 +319,27 @@ class WorldView(QWidget):
         if self._mode == "dragging":
             self._mode = "aiming"
 
+    def _scale(self) -> float:
+        # Pixels per metre, sized so WORLD_EXTENT_M fills the smaller dimension.
+        # Keeps the grid square and centred as the splitter resizes the pane.
+        return min(self.width(), self.height()) / WORLD_EXTENT_M
+
     def _screen_to_world(self, pos) -> tuple[float, float]:
         cx = self.width() / 2.0
         cy = self.height() / 2.0
-        return ((pos.x() - cx) / WORLD_PX_PER_M, (cy - pos.y()) / WORLD_PX_PER_M)
+        scale = self._scale()
+        return ((pos.x() - cx) / scale, (cy - pos.y()) / scale)
 
     def _buddy_under(self, pos) -> Buddy | None:
         cx = self.width() / 2.0
         cy = self.height() / 2.0
+        scale = self._scale()
         hit_radius_px = 24.0
         best = None
         best_dist = hit_radius_px
         for buddy in self._world.buddies:
-            sx = cx + buddy.x * WORLD_PX_PER_M
-            sy = cy - buddy.y * WORLD_PX_PER_M
+            sx = cx + buddy.x * scale
+            sy = cy - buddy.y * scale
             d = math.hypot(pos.x() - sx, pos.y() - sy)
             if d < best_dist:
                 best_dist = d
@@ -336,28 +361,53 @@ class MainWindow(QMainWindow):
 
         self._world_view = WorldView(world)
 
+        # Device rows stack in their own pane below the splitter handle.
+        devices = QWidget()
+        self._devices = QVBoxLayout(devices)
+        self._devices.setContentsMargins(0, 0, 0, 0)
+        self._devices.setSpacing(16)
+        self._devices.addStretch(1)
+
+        splitter = QSplitter(Qt.Orientation.Vertical)
+        splitter.setChildrenCollapsible(False)
+        splitter.setHandleWidth(8)
+        splitter.setStyleSheet(
+            """
+            QSplitter::handle:vertical {
+                background-color: #383838;
+                margin: 2px 80px;
+                border-radius: 2px;
+            }
+            QSplitter::handle:vertical:hover {
+                background-color: #4a90d9;
+            }
+            """
+        )
+        splitter.addWidget(self._world_view)
+        splitter.addWidget(devices)
+        # Give spare space to the world view; the device rows keep their hint.
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 0)
+        splitter.setSizes([WORLD_PX, 200])
+
         root = QWidget()
         root.setObjectName("root")
         root.setStyleSheet("QWidget#root { background-color: #1e1e1e; }")
-        self._stack = QVBoxLayout(root)
-        self._stack.setContentsMargins(16, 16, 16, 16)
-        self._stack.setSpacing(16)
-        self._stack.addWidget(
-            self._world_view, alignment=Qt.AlignmentFlag.AlignHCenter
-        )
-        self._stack.addStretch(1)
+        layout = QVBoxLayout(root)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.addWidget(splitter)
         self.setCentralWidget(root)
         self.resize(720, 600)
 
     def add_row(self, buddy: Buddy) -> None:
         row = DeviceRow(buddy)
         self._rows[buddy.id] = row
-        self._stack.insertWidget(self._stack.count() - 1, row)
+        self._devices.insertWidget(self._devices.count() - 1, row)
 
     def remove_row(self, buddy: Buddy) -> None:
         row = self._rows.pop(buddy.id, None)
         if row:
-            self._stack.removeWidget(row)
+            self._devices.removeWidget(row)
             row.deleteLater()
 
     def refresh_row(self, buddy: Buddy) -> None:
@@ -370,9 +420,10 @@ class HarnessServer(QObject):
     buddy_connected = Signal(object)
     buddy_disconnected = Signal(object)
 
-    def __init__(self, world: World) -> None:
+    def __init__(self, world: World, ring_count: int = 0) -> None:
         super().__init__()
         self._world = world
+        self._ring_count = ring_count
         self._next_id = 0
         self._tcp = QTcpServer(self)
         self._tcp.newConnection.connect(self._on_new_connection)
@@ -382,12 +433,13 @@ class HarnessServer(QObject):
 
     def _on_new_connection(self) -> None:
         sock = self._tcp.nextPendingConnection()
+        x, y, heading_deg = self._initial_pose(self._next_id)
         buddy = Buddy(
             id=self._next_id,
             socket=sock,
-            x=float(self._next_id),
-            y=0.0,
-            heading_deg=0.0,
+            x=x,
+            y=y,
+            heading_deg=heading_deg,
         )
         self._next_id += 1
 
@@ -397,6 +449,23 @@ class HarnessServer(QObject):
 
         self._world.add(buddy)
         self.buddy_connected.emit(buddy)
+
+    def _initial_pose(self, index: int) -> tuple[float, float, float]:
+        """Starting (x, y, heading) for the index-th device to connect.
+
+        With a known ring count, devices sit evenly on a ring and face the
+        world origin. Without one, fall back to a simple line along +x.
+        """
+        if self._ring_count <= 0:
+            return float(index), 0.0, 0.0
+        radius = 1.2
+        theta = 2.0 * math.pi * (index % self._ring_count) / self._ring_count
+        x = radius * math.sin(theta)
+        y = radius * math.cos(theta)
+        # Heading uses atan2(dx, dy) like the rest of the harness; aim the
+        # vector from this device back at the origin.
+        heading_deg = math.degrees(math.atan2(-x, -y)) % 360
+        return x, y, heading_deg
 
     def _on_data(self, buddy: Buddy) -> None:
         chunk = bytes(buddy.socket.readAll())
@@ -523,6 +592,14 @@ class HarnessServer(QObject):
 def main() -> int:
     app = QApplication(sys.argv)
 
+    ring_count = 0
+    positionals = [a for a in sys.argv[1:] if not a.startswith("-")]
+    if positionals:
+        try:
+            ring_count = int(positionals[0])
+        except ValueError:
+            print(f"ignoring non-integer count {positionals[0]!r}", file=sys.stderr)
+
     signal.signal(signal.SIGINT, lambda *_: app.quit())
     # Wake the Python interpreter periodically so it can dispatch signals
     # while Qt's event loop holds the main thread.
@@ -531,7 +608,7 @@ def main() -> int:
     sigint_timer.start(100)
 
     world = World()
-    server = HarnessServer(world)
+    server = HarnessServer(world, ring_count=ring_count)
     window = MainWindow(world)
     window.show()
 
