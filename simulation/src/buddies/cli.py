@@ -40,7 +40,7 @@ SIM_SIG_KEYS = ("resolution", "cfl", "capture_every", "max_steps")
 # CLI-arg keys plus the source-tree digest so any framework or sim-source
 # edit propagates into processed's signature too.
 MASTER_META_KEYS = (*SIM_SIG_KEYS, "src_digest")
-# Files inside simulations/<sim>/ that don't produce artifacts; skipping
+# Files inside experiments/<sim>/ that don't produce artifacts; skipping
 # them means tweaking a plot doesn't force a full simulate+process rerun.
 NON_ARTIFACT_FILES = {"view.py"}
 
@@ -71,7 +71,7 @@ def _die_listing(what, items, prefix=None):
 
 
 def _load_stage(sim, stage):
-    """Import ``simulations/<sim>/<stage>.py`` by path, or None if absent."""
+    """Import ``experiments/<sim>/<stage>.py`` by path, or None if absent."""
     path = os.path.join(SIMS_DIR, sim, f"{stage}.py")
     if not os.path.exists(path):
         return None
@@ -108,7 +108,7 @@ def _processor(sim):
 def _src_digest(sim):
     """SHA-256 over the .py files that affect this sim's artifacts.
 
-    Walks ``src/buddies/`` and ``simulations/<sim>/``, skipping caches and
+    Walks ``src/buddies/`` and ``experiments/<sim>/``, skipping caches and
     view-only files. The digest goes into the master's meta; ``show`` then
     treats any source-tree change as a reason to rerun simulate/process."""
     paths = []

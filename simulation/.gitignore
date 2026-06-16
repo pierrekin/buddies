@@ -1,0 +1,3 @@
+# Simulation run artifacts
+output/
+*.npz

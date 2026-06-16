@@ -8,7 +8,3 @@ wheels/
 
 # Virtual environments
 .venv
-
-# Generated output
-output/
-*.npz
