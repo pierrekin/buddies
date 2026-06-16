@@ -110,3 +110,12 @@ impl core::fmt::Write for ByteSink<'_> {
         Ok(())
     }
 }
+
+impl core::fmt::Write for SocketStrip {
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        for b in s.bytes() {
+            self.uart.write_byte(b);
+        }
+        Ok(())
+    }
+}

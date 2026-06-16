@@ -17,7 +17,13 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from channels import Channel, TestSignalChannel
+from channels import (
+    Channel,
+    RX_POSITIONS_BODY,
+    SinglePeerChirpChannel,
+    SOUND_SPEED_M_PER_S,
+    TestSignalChannel,
+)
 
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QBrush, QColor, QPainter, QPen
@@ -57,7 +63,9 @@ class Buddy:
     )
     buf: bytearray = field(default_factory=bytearray)
     channel: Channel = field(
-        default_factory=lambda: TestSignalChannel(N_RX_CHANNELS, SAMPLE_RATE_HZ)
+        default_factory=lambda: SinglePeerChirpChannel(
+            N_RX_CHANNELS, SAMPLE_RATE_HZ
+        )
     )
 
 
@@ -409,6 +417,8 @@ class HarnessServer(QObject):
             self._handle_scan(buddy)
         elif cmd == "rx":
             self._handle_rx(buddy, parts[1:])
+        elif cmd == "bearing":
+            self._handle_bearing(buddy, parts[1:])
 
     def _handle_strip(self, buddy: Buddy, values: list[str]) -> None:
         if len(values) % 3 != 0:
@@ -457,10 +467,53 @@ class HarnessServer(QObject):
             n_channels = int(args[1])
         except ValueError:
             return
-        rx = buddy.channel.step(n_samples)
+        delays = self._per_channel_delays(buddy)
+        rx = buddy.channel.step(n_samples, per_channel_delays=delays)
         if rx.shape != (n_channels, n_samples) or rx.dtype != np.float32:
             rx = np.ascontiguousarray(rx[:n_channels, :n_samples], dtype=np.float32)
         buddy.socket.write(rx.tobytes())
+
+    def _handle_bearing(self, buddy: Buddy, args: list[str]) -> None:
+        if len(args) < 3:
+            return
+        try:
+            bearing_deg = float(args[0])
+            range_m = float(args[1])
+            peak_avg = float(args[2])
+        except ValueError:
+            return
+        target = self._find_target(buddy)
+        if target is None:
+            print(
+                f"buddy {buddy.id}: bearing={bearing_deg:+.1f} "
+                f"range={range_m:.2f} peak={peak_avg:.1f} (no target)",
+                flush=True,
+            )
+            return
+        true_bearing, true_range = self._compute_body_bearing_range(buddy, target)
+        bearing_delta = ((bearing_deg - true_bearing + 180) % 360) - 180
+        range_delta = range_m - true_range
+        print(
+            f"buddy {buddy.id}: bearing={bearing_deg:+6.1f}/{true_bearing:+6.1f} "
+            f"(d={bearing_delta:+5.1f}) range={range_m:.2f}/{true_range:.2f} "
+            f"(d={range_delta:+.2f}) peak={peak_avg:.1f}",
+            flush=True,
+        )
+
+    def _per_channel_delays(self, buddy: Buddy) -> list[int] | None:
+        target = self._find_target(buddy)
+        if target is None:
+            return None
+        h_rad = math.radians(buddy.heading_deg)
+        cos_h = math.cos(h_rad)
+        sin_h = math.sin(h_rad)
+        delays: list[int] = []
+        for bx, by in RX_POSITIONS_BODY:
+            wx = buddy.x + bx * cos_h + by * sin_h
+            wy = buddy.y - bx * sin_h + by * cos_h
+            range_m = math.hypot(target.x - wx, target.y - wy)
+            delays.append(round(range_m / SOUND_SPEED_M_PER_S * SAMPLE_RATE_HZ))
+        return delays
 
     def _on_disconnect(self, buddy: Buddy) -> None:
         self._world.remove(buddy)

@@ -40,3 +40,10 @@ impl Adc for SemihostingStrip {
         }
     }
 }
+
+impl core::fmt::Write for SemihostingStrip {
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        hprint!("{}", s);
+        Ok(())
+    }
+}

@@ -7,6 +7,7 @@ pub struct Peer {
     pub range_m: f32,
 }
 
+#[allow(dead_code)]
 pub trait PeerLocator {
     fn scan(&mut self) -> Option<Peer>;
 }
