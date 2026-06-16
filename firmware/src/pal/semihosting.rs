@@ -2,7 +2,7 @@ use cortex_m_semihosting::{hprint, hprintln};
 
 use crate::peers::{Peer, PeerLocator};
 
-use super::{Rgb, RgbStrip};
+use super::{Adc, Rgb, RgbStrip};
 
 /// Output format: `strip: #ff0000 #ff7f00 ...`.
 pub struct SemihostingStrip;
@@ -30,5 +30,13 @@ impl PeerLocator for SemihostingStrip {
             bearing_deg: 45.0,
             range_m: 2.0,
         })
+    }
+}
+
+impl Adc for SemihostingStrip {
+    fn read_block(&mut self, n_samples: usize, n_channels: usize, out: &mut [f32]) {
+        for v in &mut out[..n_samples * n_channels] {
+            *v = 0.0;
+        }
     }
 }

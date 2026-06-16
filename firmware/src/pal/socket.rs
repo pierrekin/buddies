@@ -5,7 +5,7 @@ use cortex_m_semihosting::hprintln;
 use crate::peers::{Peer, PeerLocator};
 
 use super::uart::Uart0;
-use super::{Rgb, RgbStrip};
+use super::{Adc, Rgb, RgbStrip};
 
 /// Sync byte the host sends once it's connected and ready. Prevents
 /// losing the first frames if the listener attaches late.
@@ -48,6 +48,23 @@ impl PeerLocator for SocketStrip {
         let mut buf = [0u8; 96];
         let n = read_line(&mut self.uart, &mut buf);
         parse_peer_response(&buf[..n])
+    }
+}
+
+impl Adc for SocketStrip {
+    fn read_block(&mut self, n_samples: usize, n_channels: usize, out: &mut [f32]) {
+        {
+            let mut w = ByteSink { uart: &mut self.uart };
+            let _ = write!(w, "rx {} {}\n", n_samples, n_channels);
+        }
+        let total = n_samples * n_channels;
+        for slot in &mut out[..total] {
+            let mut b = [0u8; 4];
+            for byte in &mut b {
+                *byte = self.uart.read_byte_blocking();
+            }
+            *slot = f32::from_le_bytes(b);
+        }
     }
 }
 

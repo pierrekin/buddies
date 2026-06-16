@@ -9,20 +9,35 @@ use embassy_executor::{Executor, Spawner};
 use panic_semihosting as _;
 use static_cell::StaticCell;
 
-use crate::pal::{ActiveStrip, Rgb, RgbStrip};
+use crate::pal::{ActiveStrip, Adc, Rgb, RgbStrip};
 use crate::peers::{Peer, PeerLocator};
 
 const N_PIXELS: usize = 8;
 const LIT: Rgb = Rgb::new(0, 255, 0);
 
+const ADC_BLOCK: usize = 64;
+const ADC_CHANNELS: usize = 4;
+
 #[embassy_executor::task]
 async fn app(mut backend: ActiveStrip) {
     let mut buf = [Rgb::OFF; N_PIXELS];
+    let mut adc_buf = [0f32; ADC_BLOCK * ADC_CHANNELS];
     let mut iter: usize = 0;
     loop {
         let peer = backend.scan();
         render(&mut buf, peer);
         backend.write(&buf);
+        backend.read_block(ADC_BLOCK, ADC_CHANNELS, &mut adc_buf);
+
+        if iter % 10 == 0 {
+            cortex_m_semihosting::hprintln!(
+                "rx ch0[0..3]={} {} {}",
+                adc_buf[0],
+                adc_buf[1],
+                adc_buf[2]
+            );
+        }
+
         cortex_m::asm::delay(5_000_000);
         iter = iter.wrapping_add(1);
 

@@ -15,6 +15,10 @@ import signal
 import sys
 from dataclasses import dataclass, field
 
+import numpy as np
+
+from channels import Channel, TestSignalChannel
+
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QBrush, QColor, QPainter, QPen
 from PySide6.QtNetwork import QHostAddress, QTcpServer, QTcpSocket
@@ -37,6 +41,9 @@ WORLD_EXTENT_M = 4.0
 WORLD_PX_PER_M = 80.0
 WORLD_PX = int(WORLD_EXTENT_M * WORLD_PX_PER_M)
 
+SAMPLE_RATE_HZ = 200_000
+N_RX_CHANNELS = 4
+
 
 @dataclass
 class Buddy:
@@ -49,6 +56,9 @@ class Buddy:
         default_factory=lambda: [(0, 0, 0)] * N_LEDS
     )
     buf: bytearray = field(default_factory=bytearray)
+    channel: Channel = field(
+        default_factory=lambda: TestSignalChannel(N_RX_CHANNELS, SAMPLE_RATE_HZ)
+    )
 
 
 class World(QObject):
@@ -397,6 +407,8 @@ class HarnessServer(QObject):
             self._handle_strip(buddy, parts[1:])
         elif cmd == "scan":
             self._handle_scan(buddy)
+        elif cmd == "rx":
+            self._handle_rx(buddy, parts[1:])
 
     def _handle_strip(self, buddy: Buddy, values: list[str]) -> None:
         if len(values) % 3 != 0:
@@ -436,6 +448,19 @@ class HarnessServer(QObject):
         world_bearing = math.degrees(math.atan2(dx, dy)) % 360
         body_bearing = ((world_bearing - viewer.heading_deg + 180) % 360) - 180
         return body_bearing, range_m
+
+    def _handle_rx(self, buddy: Buddy, args: list[str]) -> None:
+        if len(args) != 2:
+            return
+        try:
+            n_samples = int(args[0])
+            n_channels = int(args[1])
+        except ValueError:
+            return
+        rx = buddy.channel.step(n_samples)
+        if rx.shape != (n_channels, n_samples) or rx.dtype != np.float32:
+            rx = np.ascontiguousarray(rx[:n_channels, :n_samples], dtype=np.float32)
+        buddy.socket.write(rx.tobytes())
 
     def _on_disconnect(self, buddy: Buddy) -> None:
         self._world.remove(buddy)

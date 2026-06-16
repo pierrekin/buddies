@@ -33,3 +33,9 @@ impl Rgb {
 pub trait RgbStrip {
     fn write(&mut self, pixels: &[Rgb]);
 }
+
+/// Multi-channel ADC. `out` is filled as a sequential layout:
+/// `[ch0_sample0..ch0_sampleN-1, ch1_sample0..ch1_sampleN-1, ...]`.
+pub trait Adc {
+    fn read_block(&mut self, n_samples: usize, n_channels: usize, out: &mut [f32]);
+}
