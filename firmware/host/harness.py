@@ -17,6 +17,7 @@ from __future__ import annotations
 import math
 import signal
 import sys
+import time
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -29,7 +30,7 @@ from channels import (
     TestSignalChannel,
 )
 
-from PySide6.QtCore import QObject, Qt, QTimer, Signal
+from PySide6.QtCore import QObject, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QBrush, QColor, QPainter, QPen
 from PySide6.QtNetwork import QHostAddress, QTcpServer, QTcpSocket
 from PySide6.QtWidgets import (
@@ -38,8 +39,11 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMainWindow,
+    QPushButton,
+    QScrollArea,
     QSizePolicy,
     QSplitter,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -47,7 +51,18 @@ from PySide6.QtWidgets import (
 
 HOST = "127.0.0.1"
 PORT = 5555
-N_LEDS = 8
+N_LEDS = 16
+LED_ROWS = 3
+LED_CENTER = N_LEDS // 2
+
+# Shared frame styling so the live device rows and the UI gallery match.
+ROW_STYLE = """
+    QFrame#row {
+        background-color: #262626;
+        border: 1px solid #383838;
+        border-radius: 8px;
+    }
+"""
 
 WORLD_EXTENT_M = 4.0
 WORLD_PX_PER_M = 80.0
@@ -64,8 +79,9 @@ class Buddy:
     x: float = 0.0
     y: float = 0.0
     heading_deg: float = 0.0
-    leds: list[tuple[int, int, int]] = field(
-        default_factory=lambda: [(0, 0, 0)] * N_LEDS
+    # Full LED_ROWS x N_LEDS frame the firmware renders and streams over.
+    leds: list[list[tuple[int, int, int]]] = field(
+        default_factory=lambda: [[(0, 0, 0)] * N_LEDS for _ in range(LED_ROWS)]
     )
     buf: bytearray = field(default_factory=bytearray)
     channel: Channel = field(
@@ -73,6 +89,8 @@ class Buddy:
             N_RX_CHANNELS, SAMPLE_RATE_HZ
         )
     )
+    # Tap-button clicks waiting to be drained by the firmware's `taps` poll.
+    pending_taps: int = 0
 
 
 class World(QObject):
@@ -99,54 +117,68 @@ class World(QObject):
         self.buddy_updated.emit(buddy)
 
 
-class LedIndicator(QWidget):
+class LedBar(QWidget):
+    """The device's side panel: an N_LEDS x LED_ROWS matrix of small LEDs.
+
+    `set_columns` drives the live in-plane view (one azimuth value per column,
+    replicated down every row). `set_grid` addresses each cell directly, which
+    the UI gallery uses to draw tees, pips and other multi-row glyphs.
+    """
+
+    COLS = N_LEDS
+    ROWS = LED_ROWS
+    GAP_PX = 2.0
+
     def __init__(self) -> None:
         super().__init__()
-        self._color = QColor(0, 0, 0)
-        self.setFixedSize(40, 40)
+        self._grid = [[(0, 0, 0)] * self.COLS for _ in range(self.ROWS)]
+        self.setMinimumSize(self.COLS * 14, self.ROWS * 14)
+        self.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
 
-    def set_rgb(self, r: int, g: int, b: int) -> None:
-        self._color = QColor(r, g, b)
+    def set_columns(self, cols: list[tuple[int, int, int]]) -> None:
+        cols = [tuple(c) for c in cols[: self.COLS]]
+        cols += [(0, 0, 0)] * (self.COLS - len(cols))
+        self._grid = [list(cols) for _ in range(self.ROWS)]
+        self.update()
+
+    def set_grid(self, grid: list[list[tuple[int, int, int]]]) -> None:
+        self._grid = [
+            [tuple(grid[r][c]) for c in range(self.COLS)]
+            for r in range(self.ROWS)
+        ]
         self.update()
 
     def paintEvent(self, _event) -> None:
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        p.setPen(QPen(QColor(40, 40, 40), 2))
-        p.setBrush(QBrush(self._color))
-        p.drawEllipse(4, 4, 32, 32)
+        p.fillRect(self.rect(), QColor(10, 10, 10))
+
+        gap = self.GAP_PX
+        cell_w = (self.width() - gap * (self.COLS + 1)) / self.COLS
+        cell_h = (self.height() - gap * (self.ROWS + 1)) / self.ROWS
+        radius = min(cell_w, cell_h) * 0.3
+
+        p.setPen(Qt.PenStyle.NoPen)
+        for row in range(self.ROWS):
+            y = gap + row * (cell_h + gap)
+            for col in range(self.COLS):
+                r, g, b = self._grid[row][col]
+                lit = (r, g, b) != (0, 0, 0)
+                color = QColor(r, g, b) if lit else QColor(26, 26, 26)
+                x = gap + col * (cell_w + gap)
+                p.setBrush(QBrush(color))
+                p.drawRoundedRect(QRectF(x, y, cell_w, cell_h), radius, radius)
 
 
-class DeviceRow(QFrame):
-    def __init__(self, buddy: Buddy) -> None:
+class LedPanel(QFrame):
+    """The dark device 'case' wrapping an LedBar plus a caption."""
+
+    def __init__(self, caption: str = "") -> None:
         super().__init__()
-        self._buddy = buddy
-        self.setObjectName("row")
+        self.setObjectName("case")
         self.setStyleSheet(
-            """
-            QFrame#row {
-                background-color: #262626;
-                border: 1px solid #383838;
-                border-radius: 8px;
-            }
-            """
-        )
-
-        self._leds = [LedIndicator() for _ in range(N_LEDS)]
-        led_row = QWidget()
-        led_layout = QHBoxLayout(led_row)
-        led_layout.setContentsMargins(0, 0, 0, 0)
-        led_layout.setSpacing(6)
-        for led in self._leds:
-            led_layout.addWidget(led)
-
-        label = QLabel(f"Device {buddy.id}")
-        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        label.setStyleSheet("color: #aaa; font-size: 11pt;")
-
-        case = QFrame()
-        case.setObjectName("case")
-        case.setStyleSheet(
             """
             QFrame#case {
                 background-color: #181818;
@@ -155,56 +187,276 @@ class DeviceRow(QFrame):
             }
             """
         )
-        case_layout = QVBoxLayout(case)
-        case_layout.setContentsMargins(20, 16, 20, 12)
-        case_layout.setSpacing(10)
-        case_layout.addWidget(led_row)
-        case_layout.addWidget(label)
+        self.bar = LedBar()
+        self._caption = QLabel(caption)
+        self._caption.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._caption.setStyleSheet("color: #aaa; font-size: 11pt;")
 
-        self._debug = QLabel()
-        self._debug.setStyleSheet(
-            "color: #bbb; "
-            "background-color: transparent; "
-            "font-family: Menlo, Monaco, Courier, monospace; "
-            "font-size: 10pt;"
-        )
-        self._debug.setAlignment(
-            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft
-        )
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 16, 20, 12)
+        layout.setSpacing(10)
+        layout.addWidget(self.bar)
+        layout.addWidget(self._caption)
 
-        debug_box = QFrame()
-        debug_box.setObjectName("debug")
-        debug_box.setStyleSheet(
+    def set_caption(self, text: str) -> None:
+        self._caption.setText(text)
+
+
+class InfoBox(QFrame):
+    """The text panel beside a device/screen (debug readout or explanation)."""
+
+    def __init__(self, mono: bool = False) -> None:
+        super().__init__()
+        self.setObjectName("info")
+        self.setStyleSheet(
             """
-            QFrame#debug {
+            QFrame#info {
                 background-color: #1a1a1a;
                 border: 1px solid #2c2c2c;
                 border-radius: 6px;
             }
             """
         )
-        debug_layout = QVBoxLayout(debug_box)
-        debug_layout.setContentsMargins(14, 14, 14, 14)
-        debug_layout.addWidget(self._debug)
-        debug_layout.addStretch(1)
+        font = (
+            "font-family: Menlo, Monaco, Courier, monospace; " if mono else ""
+        )
+        self.label = QLabel()
+        self.label.setWordWrap(True)
+        self.label.setStyleSheet(
+            f"color: #bbb; background-color: transparent; font-size: 10pt; {font}"
+        )
+        self.label.setAlignment(
+            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft
+        )
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 14, 14, 14)
+        layout.addWidget(self.label)
+        layout.addStretch(1)
+
+
+class DeviceRow(QFrame):
+    def __init__(self, buddy: Buddy) -> None:
+        super().__init__()
+        self._buddy = buddy
+        self.setObjectName("row")
+        self.setStyleSheet(ROW_STYLE)
+
+        self._panel = LedPanel(f"Device {buddy.id}")
+        self._info = InfoBox(mono=True)
+
+        tap_btn = QPushButton("Tap")
+        tap_btn.setStyleSheet(
+            "QPushButton {"
+            " background-color: #2f2f2f; color: #ddd;"
+            " border: 1px solid #444; border-radius: 6px; padding: 6px 0; }"
+            "QPushButton:pressed { background-color: #4a90d9; color: #fff; }"
+        )
+        tap_btn.clicked.connect(self._on_tap)
+
+        left = QWidget()
+        left_col = QVBoxLayout(left)
+        left_col.setContentsMargins(0, 0, 0, 0)
+        left_col.setSpacing(8)
+        left_col.addWidget(self._panel)
+        left_col.addWidget(tap_btn)
 
         row_layout = QHBoxLayout(self)
         row_layout.setContentsMargins(12, 12, 12, 12)
         row_layout.setSpacing(12)
-        row_layout.addWidget(case)
-        row_layout.addWidget(debug_box, stretch=1)
+        row_layout.addWidget(left)
+        row_layout.addWidget(self._info, stretch=1)
 
         self.refresh()
 
+    def _on_tap(self) -> None:
+        # Firmware drains this count on its next `taps` poll.
+        self._buddy.pending_taps += 1
+
     def refresh(self) -> None:
-        for i, (r, g, b) in enumerate(self._buddy.leds):
-            if i < len(self._leds):
-                self._leds[i].set_rgb(r, g, b)
-        self._debug.setText(
+        self._panel.bar.set_grid(self._buddy.leds)
+        self._info.label.setText(
             f"id       : {self._buddy.id}\n"
             f"position : ({self._buddy.x:+.2f}, {self._buddy.y:+.2f}) m\n"
             f"heading  : {self._buddy.heading_deg:.1f}°"
         )
+
+
+# --- UI screen gallery -----------------------------------------------------
+#
+# Pure functions returning a LED_ROWS x N_LEDS grid of RGB tuples. Row 0 is the
+# top lightpipe, row 1 the middle, row 2 the bottom. Rows are spatial: bearing
+# rides all rows (the in-plane stem), identity rides the bottom, tracking the
+# middle. A tap is modal: it commandeers the bar for a readout, then hands the
+# rows back to the live position view.
+
+OFF = (0, 0, 0)
+GREEN = (0, 220, 0)
+WHITE = (235, 235, 235)
+BLUE = (70, 150, 255)
+
+
+def _blank() -> list[list[tuple[int, int, int]]]:
+    return [[OFF] * N_LEDS for _ in range(LED_ROWS)]
+
+
+def _pip_cols(n: int, spacing: int = 2, center: int = LED_CENTER) -> list[int]:
+    """Columns for `n` evenly spaced pips centred on `center`."""
+    start = center - (n - 1) * spacing // 2
+    return [start + i * spacing for i in range(n)]
+
+
+def screen_position(col: int, color: tuple[int, int, int] = GREEN):
+    """Live bearing: a full-height stem at azimuth column `col`."""
+    grid = _blank()
+    for r in range(LED_ROWS):
+        grid[r][col] = color
+    return grid
+
+
+def screen_identity(n: int):
+    """'Who am I' = white pips on the bottom row + stem rising above (a ⊥)."""
+    grid = _blank()
+    for c in _pip_cols(n):
+        grid[2][c] = WHITE
+    grid[0][LED_CENTER] = WHITE
+    grid[1][LED_CENTER] = WHITE
+    return grid
+
+
+def screen_tracking(n: int):
+    """'Who am I tracking' = blue pips on the top row + stem hanging below."""
+    grid = _blank()
+    for c in _pip_cols(n):
+        grid[0][c] = BLUE
+    grid[1][LED_CENTER] = BLUE
+    grid[2][LED_CENTER] = BLUE
+    return grid
+
+
+def screen_reveal(target: int, bearing_col: int):
+    """One-tap reveal: blue tracking pips on the top row laid over the live
+    green bearing stem (which drops to the middle + bottom rows)."""
+    grid = _blank()
+    for r in (1, 2):
+        grid[r][bearing_col] = GREEN
+    for c in _pip_cols(target):
+        grid[0][c] = BLUE
+    return grid
+
+
+def screen_combined(me: int, target: int):
+    """Both readouts at once: blue tracking (top), white identity (bottom)."""
+    grid = _blank()
+    for c in _pip_cols(target):
+        grid[0][c] = BLUE
+    for c in _pip_cols(me):
+        grid[2][c] = WHITE
+    grid[1][LED_CENTER] = WHITE
+    return grid
+
+
+class GalleryRow(QFrame):
+    """One gallery entry: a LED screen with an explanation beside it.
+
+    With `flashing=True` the screen blinks on/off to show a "being set" state.
+    """
+
+    def __init__(
+        self, grid, caption: str, explanation: str, flashing: bool = False
+    ) -> None:
+        super().__init__()
+        self.setObjectName("row")
+        self.setStyleSheet(ROW_STYLE)
+
+        self._grid = grid
+        self._panel = LedPanel(caption)
+        self._panel.bar.set_grid(grid)
+        info = InfoBox()
+        info.label.setText(explanation)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(12)
+        layout.addWidget(self._panel)
+        layout.addWidget(info, stretch=1)
+
+        if flashing:
+            self._on = True
+            self._timer = QTimer(self)
+            self._timer.timeout.connect(self._blink)
+            self._timer.start(450)
+
+    def _blink(self) -> None:
+        self._on = not self._on
+        self._panel.bar.set_grid(self._grid if self._on else _blank())
+
+
+def build_gallery() -> QWidget:
+    container = QWidget()
+    container.setObjectName("root")
+    container.setStyleSheet("QWidget#root { background-color: #1e1e1e; }")
+    col = QVBoxLayout(container)
+    col.setContentsMargins(16, 16, 16, 16)
+    col.setSpacing(16)
+
+    def header(text: str) -> None:
+        label = QLabel(text)
+        label.setStyleSheet("color: #ddd; font-size: 13pt; font-weight: 600;")
+        col.addWidget(label)
+
+    def row(grid, caption, explanation, flashing=False) -> None:
+        col.addWidget(GalleryRow(grid, caption, explanation, flashing))
+
+    header("Live position (green stem, all three rows)")
+    row(screen_position(LED_CENTER), "ahead",
+        "The peer is dead ahead, so the stem sits at the centre.")
+    row(screen_position(LED_CENTER - 4), "left",
+        "The peer is off to the left.")
+    row(screen_position(0), "hard left",
+        "The end column flags a peer past the frontal ±90° arc.")
+    row(_blank(), "no peer",
+        "Nothing is detected, so the bar stays dark.")
+
+    header("Boot, setting identity (white, bottom row, flashing)")
+    row(screen_identity(1), "I am 1 (setting)",
+        "It powers up flashing here. Double-tap to step from 1 to 2 to 3, "
+        "and it stops flashing once it commits on timeout. The pips are "
+        "white so this never reads as a blue tracking screen.", flashing=True)
+    row(screen_identity(3), "I am 3 (setting)",
+        "The same flow stepped to 3. Odd counts sit a pip under the stem to "
+        "form a tee, while even counts straddle it.", flashing=True)
+
+    header("Default tracking (blue, top row, steady)")
+    row(screen_tracking(2), "tracking 2",
+        "After identity commits it drops into tracking mode. The screen is "
+        "steady rather than flashing, because this is the committed state "
+        "and not a prompt.")
+
+    header("One tap, reveal who you are tracking (steady)")
+    row(screen_reveal(2, LED_CENTER - 4), "reveal tracking 2",
+        "Blue tracking pips ride the top row while the green bearing stem "
+        "drops to the middle and bottom rows, so you still see direction. It "
+        "holds for a few seconds and then returns to the plain bearing.")
+
+    header("Two taps then pause, setting who you track (flashing)")
+    row(screen_tracking(3), "setting tracking 3",
+        "A double-tap enters set mode and the screen starts flashing. Keep "
+        "double-tapping to cycle the target, and it commits on timeout.",
+        flashing=True)
+
+    header("Many taps, back to setting identity (flashing)")
+    row(screen_identity(2), "re-set I am 2",
+        "A long burst re-opens identity, which is rare. It uses the same "
+        "white bottom flow as boot. A hold-shake entry would be safer here.",
+        flashing=True)
+
+    col.addStretch(1)
+
+    scroll = QScrollArea()
+    scroll.setWidgetResizable(True)
+    scroll.setWidget(container)
+    scroll.setStyleSheet("QScrollArea { border: none; background-color: #1e1e1e; }")
+    return scroll
 
 
 class WorldView(QWidget):
@@ -396,7 +648,11 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(root)
         layout.setContentsMargins(16, 16, 16, 16)
         layout.addWidget(splitter)
-        self.setCentralWidget(root)
+
+        tabs = QTabWidget()
+        tabs.addTab(root, "Live")
+        tabs.addTab(build_gallery(), "UI Screens")
+        self.setCentralWidget(tabs)
         self.resize(720, 600)
 
     def add_row(self, buddy: Buddy) -> None:
@@ -425,6 +681,8 @@ class HarnessServer(QObject):
         self._world = world
         self._ring_count = ring_count
         self._next_id = 0
+        # Firmware emits a bearing line every loop; throttle the console echo.
+        self._last_bearing_log: dict[int, float] = {}
         self._tcp = QTcpServer(self)
         self._tcp.newConnection.connect(self._on_new_connection)
 
@@ -482,31 +740,30 @@ class HarnessServer(QObject):
         cmd = parts[0]
         if cmd == "strip":
             self._handle_strip(buddy, parts[1:])
-        elif cmd == "scan":
-            self._handle_scan(buddy)
         elif cmd == "rx":
             self._handle_rx(buddy, parts[1:])
         elif cmd == "bearing":
             self._handle_bearing(buddy, parts[1:])
+        elif cmd == "taps":
+            self._handle_taps(buddy)
+        elif cmd == "log":
+            print(f"buddy {buddy.id}: {line.strip()[4:]}", flush=True)
+
+    def _handle_taps(self, buddy: Buddy) -> None:
+        n = buddy.pending_taps
+        buddy.pending_taps = 0
+        buddy.socket.write(f"taps {n}\n".encode("ascii"))
 
     def _handle_strip(self, buddy: Buddy, values: list[str]) -> None:
-        if len(values) % 3 != 0:
+        if len(values) != N_LEDS * LED_ROWS * 3:
             return
-        triples = list(zip(values[::3], values[1::3], values[2::3]))
         try:
-            buddy.leds = [(int(r), int(g), int(b)) for r, g, b in triples[:N_LEDS]]
+            flat = [int(v) for v in values]
         except ValueError:
             return
+        px = list(zip(flat[::3], flat[1::3], flat[2::3]))
+        buddy.leds = [px[r * N_LEDS:(r + 1) * N_LEDS] for r in range(LED_ROWS)]
         self._world.updated(buddy)
-
-    def _handle_scan(self, buddy: Buddy) -> None:
-        target = self._find_target(buddy)
-        if target is None:
-            buddy.socket.write(b"peer none\n")
-            return
-        bearing, range_m = self._compute_body_bearing_range(buddy, target)
-        line = f"peer {target.id} {bearing:.2f} {range_m:.3f}\n"
-        buddy.socket.write(line.encode("ascii"))
 
     def _find_target(self, buddy: Buddy) -> Buddy | None:
         other_ids = sorted(b.id for b in self._world.buddies if b.id != buddy.id)
@@ -551,6 +808,10 @@ class HarnessServer(QObject):
             peak_avg = float(args[2])
         except ValueError:
             return
+        now = time.monotonic()
+        if now - self._last_bearing_log.get(buddy.id, 0.0) < 1.0:
+            return
+        self._last_bearing_log[buddy.id] = now
         target = self._find_target(buddy)
         if target is None:
             print(

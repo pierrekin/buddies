@@ -2,10 +2,8 @@ use core::fmt::Write;
 
 use cortex_m_semihosting::hprintln;
 
-use crate::peers::{Peer, PeerLocator};
-
 use super::uart::Uart0;
-use super::{Adc, Rgb, RgbStrip};
+use super::{Adc, Frame, RgbStrip, ROWS, TapInput};
 
 /// Sync byte the host sends once it's connected and ready. Prevents
 /// losing the first frames if the listener attaches late.
@@ -30,24 +28,26 @@ impl SocketStrip {
 }
 
 impl RgbStrip for SocketStrip {
-    fn write(&mut self, pixels: &[Rgb]) {
+    fn write(&mut self, frame: &Frame) {
         let mut w = ByteSink { uart: &mut self.uart };
         let _ = write!(w, "strip");
-        for p in pixels {
-            let _ = write!(w, " {} {} {}", p.r, p.g, p.b);
+        for row in 0..ROWS {
+            for p in frame.row(row) {
+                let _ = write!(w, " {} {} {}", p.r, p.g, p.b);
+            }
         }
         let _ = writeln!(w);
     }
 }
 
-impl PeerLocator for SocketStrip {
-    fn scan(&mut self) -> Option<Peer> {
-        for &b in b"scan\n" {
+impl TapInput for SocketStrip {
+    fn poll_taps(&mut self) -> u8 {
+        for &b in b"taps\n" {
             self.uart.write_byte(b);
         }
-        let mut buf = [0u8; 96];
+        let mut buf = [0u8; 32];
         let n = read_line(&mut self.uart, &mut buf);
-        parse_peer_response(&buf[..n])
+        parse_taps_response(&buf[..n])
     }
 }
 
@@ -82,20 +82,15 @@ fn read_line(uart: &mut Uart0, buf: &mut [u8]) -> usize {
     }
 }
 
-fn parse_peer_response(line: &[u8]) -> Option<Peer> {
-    let s = core::str::from_utf8(line).ok()?;
+fn parse_taps_response(line: &[u8]) -> u8 {
+    let Ok(s) = core::str::from_utf8(line) else {
+        return 0;
+    };
     let mut parts = s.split_whitespace();
-    if parts.next()? != "peer" {
-        return None;
+    if parts.next() != Some("taps") {
+        return 0;
     }
-    let first = parts.next()?;
-    if first == "none" {
-        return None;
-    }
-    let id = first.parse::<u8>().ok()?;
-    let bearing_deg = parts.next()?.parse::<f32>().ok()?;
-    let range_m = parts.next()?.parse::<f32>().ok()?;
-    Some(Peer { id, bearing_deg, range_m })
+    parts.next().and_then(|v| v.parse::<u8>().ok()).unwrap_or(0)
 }
 
 struct ByteSink<'a> {

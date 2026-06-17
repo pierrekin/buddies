@@ -3,19 +3,33 @@ name = "buddies-fw"
 version = "0.1.0"
 edition = "2024"
 
+[workspace]
+members = ["ui"]
+
 [features]
 default = ["pal-semihosting"]
 pal-semihosting = []
 pal-socket = []
 
 [dependencies]
+buddies-ui = { path = "ui" }
 cortex-m = { version = "0.7", features = ["critical-section-single-core"] }
 cortex-m-rt = "0.7"
 cortex-m-semihosting = "0.5"
 panic-semihosting = { version = "0.6", features = ["exit"] }
-embassy-executor = { version = "0.6", features = ["arch-cortex-m", "executor-thread"] }
+embassy-executor = { version = "0.6", features = [
+    "arch-cortex-m",
+    "executor-thread",
+    # The app task keeps the 16 KB ADC block (plus chirp/corr buffers) live
+    # across its loop await, so the whole ~20 KB lands in the task arena.
+    "task-arena-size-24576",
+] }
 libm = "0.2"
 static_cell = "2"
+embassy-time = { version = "0.5.1", features = ["tick-hz-1_000", "generic-queue-8"] }
+embassy-time-driver = "0.2.2"
+embassy-time-queue-utils = "0.3.2"
+critical-section = "1.2.0"
 
 [profile.dev]
 opt-level = 1

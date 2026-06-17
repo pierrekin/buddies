@@ -1,8 +1,6 @@
 use cortex_m_semihosting::{hprint, hprintln};
 
-use crate::peers::{Peer, PeerLocator};
-
-use super::{Adc, Rgb, RgbStrip};
+use super::{Adc, Frame, RgbStrip, ROWS, TapInput};
 
 /// Output format: `strip: #ff0000 #ff7f00 ...`.
 pub struct SemihostingStrip;
@@ -14,22 +12,14 @@ impl SemihostingStrip {
 }
 
 impl RgbStrip for SemihostingStrip {
-    fn write(&mut self, pixels: &[Rgb]) {
+    fn write(&mut self, frame: &Frame) {
         hprint!("strip:");
-        for p in pixels {
-            hprint!(" #{:02x}{:02x}{:02x}", p.r, p.g, p.b);
+        for row in 0..ROWS {
+            for p in frame.row(row) {
+                hprint!(" #{:02x}{:02x}{:02x}", p.r, p.g, p.b);
+            }
         }
         hprintln!();
-    }
-}
-
-impl PeerLocator for SemihostingStrip {
-    fn scan(&mut self) -> Option<Peer> {
-        Some(Peer {
-            id: 1,
-            bearing_deg: 45.0,
-            range_m: 2.0,
-        })
     }
 }
 
@@ -38,6 +28,12 @@ impl Adc for SemihostingStrip {
         for v in &mut out[..n_samples * n_channels] {
             *v = 0.0;
         }
+    }
+}
+
+impl TapInput for SemihostingStrip {
+    fn poll_taps(&mut self) -> u8 {
+        0
     }
 }
 
