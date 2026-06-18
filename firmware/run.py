@@ -8,11 +8,14 @@ harness arranges the N devices on a ring aimed at the world origin.
 Ctrl-C tears the whole fleet down. Rerun to pick up recompiled code.
 
 Usage (from `firmware/`):
-    ./run.py [N]      # N defaults to 3
+    ./run.py [N]                       # N firmware instances (default 3)
+    ./run.py 2 --panel 256x64          # build for the smaller bring-up panel
+    ./run.py --features foo,bar        # enable extra cargo features
 """
 
 from __future__ import annotations
 
+import argparse
 import os
 import signal
 import subprocess
@@ -22,20 +25,50 @@ from pathlib import Path
 
 FIRMWARE_DIR = Path(__file__).resolve().parent
 
-FEATURES = ["--no-default-features", "--features", "pal-socket"]
-CARGO_BUILD = ["cargo", "build", *FEATURES]
-CARGO_RUN = ["cargo", "run", *FEATURES]
+# Always-on cargo features for a harness run; the panel and any extras come from
+# the CLI. `--no-default-features` keeps the semihosting PAL out of socket runs.
+BASE_FEATURES = ["pal-socket"]
+DEFAULT_PANEL = "rm67162"
+
+
+def cargo_cmd(verb: str, features: list[str]) -> list[str]:
+    return ["cargo", verb, "--no-default-features", "--features", ",".join(features)]
+
+
+def parse_args(argv: list[str]) -> argparse.Namespace:
+    p = argparse.ArgumentParser(
+        description="Launch the buddies harness plus N firmware instances."
+    )
+    p.add_argument(
+        "n", nargs="?", type=int, default=3,
+        help="number of firmware instances (default 3)",
+    )
+    p.add_argument(
+        "--panel", choices=["rm67162", "256x64"], default=DEFAULT_PANEL,
+        help=f"display panel to build for (default {DEFAULT_PANEL})",
+    )
+    p.add_argument(
+        "-F", "--features", action="append", default=[], metavar="FEAT",
+        help="extra cargo feature(s) to enable; repeatable or comma-separated",
+    )
+    return p.parse_args(argv)
 
 
 def main() -> int:
-    n = int(sys.argv[1]) if len(sys.argv) > 1 else 3
+    args = parse_args(sys.argv[1:])
+    n = args.n
     if n < 1:
         print("N must be >= 1", file=sys.stderr)
         return 2
 
+    extras = [f for item in args.features for f in item.split(",") if f]
+    features = [*BASE_FEATURES, f"panel-{args.panel}", *extras]
+    cargo_build = cargo_cmd("build", features)
+    cargo_run = cargo_cmd("run", features)
+
     # Compile once up front: a build error fails fast, and the instances below
     # hit a warm cache instead of racing on cargo's build lock.
-    build = subprocess.run(CARGO_BUILD, cwd=FIRMWARE_DIR)
+    build = subprocess.run(cargo_build, cwd=FIRMWARE_DIR)
     if build.returncode != 0:
         return build.returncode
 
@@ -78,7 +111,7 @@ def main() -> int:
     for _ in range(n):
         procs.append(
             subprocess.Popen(
-                CARGO_RUN,
+                cargo_run,
                 cwd=FIRMWARE_DIR,
                 start_new_session=True,
                 # Detached QEMU instances don't share the terminal's stdin.

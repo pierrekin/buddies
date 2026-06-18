@@ -31,7 +31,7 @@ from channels import (
 )
 
 from PySide6.QtCore import QObject, QRectF, Qt, QTimer, Signal
-from PySide6.QtGui import QBrush, QColor, QPainter, QPen
+from PySide6.QtGui import QBrush, QColor, QImage, QPainter, QPainterPath, QPen
 from PySide6.QtNetwork import QHostAddress, QTcpServer, QTcpSocket
 from PySide6.QtWidgets import (
     QApplication,
@@ -91,6 +91,10 @@ class Buddy:
     )
     # Tap-button clicks waiting to be drained by the firmware's `taps` poll.
     pending_taps: int = 0
+    # Latest OLED frame: dimensions plus a packed RGB888 buffer (row-major).
+    oled_w: int = 0
+    oled_h: int = 0
+    oled_rgb: bytes = b""
 
 
 class World(QObject):
@@ -172,6 +176,76 @@ class LedBar(QWidget):
                 p.drawRoundedRect(QRectF(x, y, cell_w, cell_h), radius, radius)
 
 
+class OledView(QWidget):
+    """The device's OLED screen: the RGB565 framebuffer the firmware streams,
+    drawn on a mock of the RM67162 AMOLED dev module (rounded display corners in
+    a dark board bezel). Nearest-neighbour scaling keeps the dot grid crisp. The
+    screen aspect follows the streamed frame, so it tracks whichever panel the
+    firmware was built for (256x64 bring-up or 536x240 RM67162)."""
+
+    # RM67162-ish proportions: a wide screen in a slightly larger board.
+    BEZEL_PX = 14
+    BOARD_RADIUS = 22
+    SCREEN_RADIUS = 14
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._img: QImage | None = None
+        self.setMinimumSize(360, 190)
+        self.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
+
+    def set_frame(self, w: int, h: int, rgb: bytes) -> None:
+        # Copy so the QImage owns its pixels; `rgb` is replaced every frame.
+        self._img = QImage(
+            rgb, w, h, w * 3, QImage.Format.Format_RGB888
+        ).copy()
+        self.update()
+
+    def paintEvent(self, _event) -> None:
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.fillRect(self.rect(), QColor(14, 15, 17))
+        if self._img is None:
+            return
+
+        # Fit the screen inside the widget, leaving room for the bezel, while
+        # preserving the streamed frame's aspect ratio.
+        bez = self.BEZEL_PX
+        avail_w = self.width() - 2 * bez - 8
+        avail_h = self.height() - 2 * bez - 8
+        iw, ih = self._img.width(), self._img.height()
+        scale = min(avail_w / iw, avail_h / ih)
+        sw, sh = int(iw * scale), int(ih * scale)
+        sx = (self.width() - sw) // 2
+        sy = (self.height() - sh) // 2
+
+        # Board bezel: a dark rounded slab a little larger than the screen.
+        board = QRectF(sx - bez, sy - bez, sw + 2 * bez, sh + 2 * bez)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(20, 20, 22))
+        p.drawRoundedRect(board, self.BOARD_RADIUS, self.BOARD_RADIUS)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.setPen(QPen(QColor(45, 47, 52), 1))
+        p.drawRoundedRect(board, self.BOARD_RADIUS, self.BOARD_RADIUS)
+
+        # The AMOLED itself: rounded-corner screen clipping the framebuffer.
+        screen = QRectF(sx, sy, sw, sh)
+        path = QPainterPath()
+        path.addRoundedRect(screen, self.SCREEN_RADIUS, self.SCREEN_RADIUS)
+        p.save()
+        p.setClipPath(path)
+        p.fillRect(screen, QColor(0, 0, 0))
+        scaled = self._img.scaled(
+            sw, sh,
+            Qt.AspectRatioMode.IgnoreAspectRatio,
+            Qt.TransformationMode.FastTransformation,
+        )
+        p.drawImage(sx, sy, scaled)
+        p.restore()
+
+
 class LedPanel(QFrame):
     """The dark device 'case' wrapping an LedBar plus a caption."""
 
@@ -242,6 +316,7 @@ class DeviceRow(QFrame):
         self.setStyleSheet(ROW_STYLE)
 
         self._panel = LedPanel(f"Device {buddy.id}")
+        self._oled = OledView()
         self._info = InfoBox(mono=True)
 
         tap_btn = QPushButton("Tap")
@@ -258,6 +333,7 @@ class DeviceRow(QFrame):
         left_col.setContentsMargins(0, 0, 0, 0)
         left_col.setSpacing(8)
         left_col.addWidget(self._panel)
+        left_col.addWidget(self._oled)
         left_col.addWidget(tap_btn)
 
         row_layout = QHBoxLayout(self)
@@ -274,6 +350,10 @@ class DeviceRow(QFrame):
 
     def refresh(self) -> None:
         self._panel.bar.set_grid(self._buddy.leds)
+        if self._buddy.oled_rgb:
+            self._oled.set_frame(
+                self._buddy.oled_w, self._buddy.oled_h, self._buddy.oled_rgb
+            )
         self._info.label.setText(
             f"id       : {self._buddy.id}\n"
             f"position : ({self._buddy.x:+.2f}, {self._buddy.y:+.2f}) m\n"
@@ -740,12 +820,16 @@ class HarnessServer(QObject):
         cmd = parts[0]
         if cmd == "strip":
             self._handle_strip(buddy, parts[1:])
+        elif cmd == "oled":
+            self._handle_oled(buddy, parts[1:])
         elif cmd == "rx":
             self._handle_rx(buddy, parts[1:])
         elif cmd == "bearing":
             self._handle_bearing(buddy, parts[1:])
         elif cmd == "taps":
             self._handle_taps(buddy)
+        elif cmd == "heading":
+            self._handle_heading(buddy)
         elif cmd == "log":
             print(f"buddy {buddy.id}: {line.strip()[4:]}", flush=True)
 
@@ -753,6 +837,11 @@ class HarnessServer(QObject):
         n = buddy.pending_taps
         buddy.pending_taps = 0
         buddy.socket.write(f"taps {n}\n".encode("ascii"))
+
+    def _handle_heading(self, buddy: Buddy) -> None:
+        # Mock the magnetometer with the device's true heading in the world, so
+        # the firmware's compass tape scrolls as you re-aim it in the harness.
+        buddy.socket.write(f"heading {buddy.heading_deg:.1f}\n".encode("ascii"))
 
     def _handle_strip(self, buddy: Buddy, values: list[str]) -> None:
         if len(values) != N_LEDS * LED_ROWS * 3:
@@ -763,6 +852,34 @@ class HarnessServer(QObject):
             return
         px = list(zip(flat[::3], flat[1::3], flat[2::3]))
         buddy.leds = [px[r * N_LEDS:(r + 1) * N_LEDS] for r in range(LED_ROWS)]
+        self._world.updated(buddy)
+
+    def _handle_oled(self, buddy: Buddy, args: list[str]) -> None:
+        # Line shape: `oled <w> <h> <hex>`, `<hex>` = 4 digits/pixel (big-endian
+        # RGB565), row-major. Unpack to RGB888 with numpy for speed.
+        if len(args) != 3:
+            return
+        try:
+            w, h = int(args[0]), int(args[1])
+        except ValueError:
+            return
+        hexblob = args[2]
+        if w <= 0 or h <= 0 or len(hexblob) != w * h * 4:
+            return
+        try:
+            raw = bytes.fromhex(hexblob)
+        except ValueError:
+            return
+        v = np.frombuffer(raw, dtype=">u2").astype(np.uint32)
+        r = (v >> 11) & 0x1F
+        g = (v >> 5) & 0x3F
+        b = v & 0x1F
+        r8 = ((r << 3) | (r >> 2)).astype(np.uint8)
+        g8 = ((g << 2) | (g >> 4)).astype(np.uint8)
+        b8 = ((b << 3) | (b >> 2)).astype(np.uint8)
+        buddy.oled_w = w
+        buddy.oled_h = h
+        buddy.oled_rgb = np.stack([r8, g8, b8], axis=1).tobytes()
         self._world.updated(buddy)
 
     def _find_target(self, buddy: Buddy) -> Buddy | None:

@@ -1,6 +1,6 @@
 use cortex_m_semihosting::{hprint, hprintln};
 
-use super::{Adc, Frame, RgbStrip, ROWS, TapInput};
+use super::{Adc, Frame, Heading, OledFrame, OledOut, RgbStrip, ROWS, TapInput};
 
 /// Output format: `strip: #ff0000 #ff7f00 ...`.
 pub struct SemihostingStrip;
@@ -23,6 +23,13 @@ impl RgbStrip for SemihostingStrip {
     }
 }
 
+impl OledOut for SemihostingStrip {
+    /// No-op: a full framebuffer is thousands of bytes, and every semihosting
+    /// write is a debugger trap, so streaming the OLED this way would stall the
+    /// loop. The socket PAL (used by the Qt harness) carries the screen instead.
+    fn show_oled(&mut self, _frame: &OledFrame) {}
+}
+
 impl Adc for SemihostingStrip {
     fn read_block(&mut self, n_samples: usize, n_channels: usize, out: &mut [f32]) {
         for v in &mut out[..n_samples * n_channels] {
@@ -34,6 +41,12 @@ impl Adc for SemihostingStrip {
 impl TapInput for SemihostingStrip {
     fn poll_taps(&mut self) -> u8 {
         0
+    }
+}
+
+impl Heading for SemihostingStrip {
+    fn poll_heading(&mut self) -> f32 {
+        0.0
     }
 }
 

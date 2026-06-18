@@ -2,8 +2,10 @@ use core::fmt::Write;
 
 use cortex_m_semihosting::hprintln;
 
+use buddies_ui::{OLED_H, OLED_W};
+
 use super::uart::Uart0;
-use super::{Adc, Frame, RgbStrip, ROWS, TapInput};
+use super::{Adc, Frame, Heading, OledFrame, OledOut, RgbStrip, ROWS, TapInput};
 
 /// Sync byte the host sends once it's connected and ready. Prevents
 /// losing the first frames if the listener attaches late.
@@ -40,6 +42,27 @@ impl RgbStrip for SocketStrip {
     }
 }
 
+impl OledOut for SocketStrip {
+    /// Wire format: `oled <w> <h> <hex>\n`, where `<hex>` is one contiguous
+    /// run of 4 hex digits per pixel (big-endian RGB565), row-major. Hex keeps
+    /// the framebuffer inside the existing newline-delimited line protocol with
+    /// no binary framing to get out of sync on.
+    fn show_oled(&mut self, frame: &OledFrame) {
+        const HEX: &[u8; 16] = b"0123456789abcdef";
+        {
+            let mut w = ByteSink { uart: &mut self.uart };
+            let _ = write!(w, "oled {} {} ", OLED_W, OLED_H);
+        }
+        for &px in frame.px.iter() {
+            self.uart.write_byte(HEX[((px >> 12) & 0xf) as usize]);
+            self.uart.write_byte(HEX[((px >> 8) & 0xf) as usize]);
+            self.uart.write_byte(HEX[((px >> 4) & 0xf) as usize]);
+            self.uart.write_byte(HEX[(px & 0xf) as usize]);
+        }
+        self.uart.write_byte(b'\n');
+    }
+}
+
 impl TapInput for SocketStrip {
     fn poll_taps(&mut self) -> u8 {
         for &b in b"taps\n" {
@@ -48,6 +71,19 @@ impl TapInput for SocketStrip {
         let mut buf = [0u8; 32];
         let n = read_line(&mut self.uart, &mut buf);
         parse_taps_response(&buf[..n])
+    }
+}
+
+impl Heading for SocketStrip {
+    /// Request/response mirror of `poll_taps`: send `heading\n`, read back a
+    /// `heading <deg>\n` line the harness fills with the device's true heading.
+    fn poll_heading(&mut self) -> f32 {
+        for &b in b"heading\n" {
+            self.uart.write_byte(b);
+        }
+        let mut buf = [0u8; 32];
+        let n = read_line(&mut self.uart, &mut buf);
+        parse_heading_response(&buf[..n])
     }
 }
 
@@ -91,6 +127,17 @@ fn parse_taps_response(line: &[u8]) -> u8 {
         return 0;
     }
     parts.next().and_then(|v| v.parse::<u8>().ok()).unwrap_or(0)
+}
+
+fn parse_heading_response(line: &[u8]) -> f32 {
+    let Ok(s) = core::str::from_utf8(line) else {
+        return 0.0;
+    };
+    let mut parts = s.split_whitespace();
+    if parts.next() != Some("heading") {
+        return 0.0;
+    }
+    parts.next().and_then(|v| v.parse::<f32>().ok()).unwrap_or(0.0)
 }
 
 struct ByteSink<'a> {

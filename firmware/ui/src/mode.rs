@@ -15,8 +15,9 @@ const REVEAL_MS: u64 = 3_000;
 const TRACK_COMMIT_MS: u64 = 10_000;
 /// Idle before an identity change commits.
 const IDENTITY_COMMIT_MS: u64 = 10_000;
-/// Blink half-period for "being set" screens.
-const BLINK_MS: u64 = 450;
+/// Blink half-period for "being set" screens. Shared with the OLED render so
+/// both displays blink in phase.
+pub(crate) const BLINK_MS: u64 = 450;
 /// A tap burst of at least this many opens identity (the rare, guarded path).
 const IDENTITY_BURST: u8 = 4;
 
@@ -208,7 +209,7 @@ fn bearing_to_col(bearing_deg: f32) -> usize {
     (pos + 0.5) as usize
 }
 
-fn normalize_180(deg: f32) -> f32 {
+pub(crate) fn normalize_180(deg: f32) -> f32 {
     let mut x = deg % 360.0;
     if x > 180.0 {
         x -= 360.0;

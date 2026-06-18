@@ -16,8 +16,10 @@
 
 mod frame;
 mod mode;
+mod oled;
 mod tap;
 
 pub use frame::{COLS, Frame, ROWS, Rgb};
 pub use mode::{Detection, Event, Mode, Ui, render, step};
+pub use oled::{draw_oled, render_oled, rgb565_to_rgb888, Hud, OledFrame, OLED_H, OLED_W};
 pub use tap::TapDebouncer;

@@ -7,12 +7,17 @@ edition = "2024"
 members = ["ui"]
 
 [features]
-default = ["pal-semihosting"]
+default = ["pal-semihosting", "panel-rm67162"]
 pal-semihosting = []
 pal-socket = []
+# Forward the display-panel choice to the UI crate (see ui/Cargo.toml). The UI
+# crate's defaults are disabled on the dependency below, so exactly the panel
+# selected here is active and the two never both apply.
+panel-256x64 = ["buddies-ui/panel-256x64"]
+panel-rm67162 = ["buddies-ui/panel-rm67162"]
 
 [dependencies]
-buddies-ui = { path = "ui" }
+buddies-ui = { path = "ui", default-features = false }
 cortex-m = { version = "0.7", features = ["critical-section-single-core"] }
 cortex-m-rt = "0.7"
 cortex-m-semihosting = "0.5"

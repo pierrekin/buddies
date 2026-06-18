@@ -14,11 +14,11 @@ use embassy_time::{Duration, Instant, Ticker};
 use panic_semihosting as _;
 use static_cell::StaticCell;
 
-use buddies_ui::{self as ui, Detection, Event, TapDebouncer, Ui};
+use buddies_ui::{self as ui, Detection, Event, OledFrame, TapDebouncer, Ui};
 
 use crate::bearing::N_RX;
 use crate::chirp::CHIRP_LEN;
-use crate::pal::{ActiveStrip, Adc, RgbStrip, TapInput};
+use crate::pal::{ActiveStrip, Adc, Heading, OledOut, RgbStrip, TapInput};
 
 const ADC_BLOCK: usize = 1024;
 const ADC_CHANNELS: usize = N_RX;
@@ -27,6 +27,16 @@ const CORR_LEN: usize = ADC_BLOCK - CHIRP_LEN + 1;
 const DETECT_THRESHOLD: f32 = 50.0;
 
 const LOOP_HZ: u64 = 10;
+
+// Mocked identity and battery the OLED reports; BLE will supply real diver
+// names and a fuel-gauge reading later.
+const OWN_NAME: &str = "marie";
+const BUDDY_NAME: &str = "james";
+const BATTERY_PCT: u8 = 82;
+
+/// The OLED backbuffer. `blank()` is const, so this is zero-initialised in .bss
+/// with no construction on the stack. Single-core, single-task access only.
+static mut OLED_FB: OledFrame = OledFrame::blank();
 
 #[embassy_executor::task]
 async fn app(mut backend: ActiveStrip) {
@@ -71,6 +81,22 @@ async fn app(mut backend: ActiveStrip) {
         };
         let frame = ui::render(&state, &det, now);
         backend.write(&frame);
+
+        // Draw into a single static backbuffer. At 256x64 the framebuffer is
+        // 32 KB, too large for the task stack, so it lives in .bss and is reused
+        // and cleared each frame.
+        {
+            let hud = ui::Hud {
+                own_name: OWN_NAME,
+                battery_pct: BATTERY_PCT,
+                heading_deg: backend.poll_heading(),
+                buddy_name: BUDDY_NAME,
+            };
+            let fb = unsafe { &mut *core::ptr::addr_of_mut!(OLED_FB) };
+            fb.clear();
+            let _ = ui::draw_oled(fb, &hud, &det);
+            backend.show_oled(fb);
+        }
 
         let _ = writeln!(backend, "bearing {} {} {}", bearing_deg, range_m, peak_avg);
 

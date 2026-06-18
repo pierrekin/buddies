@@ -31,7 +31,13 @@ def handle(conn: socket.socket, addr: tuple, buddy_id: int) -> None:
                 buf = rest
                 text = line.decode("ascii", errors="replace").strip()
                 parts = text.split()
-                if parts and parts[0] == "strip" and (len(parts) - 1) % 3 == 0:
+                if parts and parts[0] == "oled" and len(parts) == 4:
+                    print(
+                        f"buddy {buddy_id}: oled {parts[1]}x{parts[2]} "
+                        f"({len(parts[3]) // 4} px)",
+                        flush=True,
+                    )
+                elif parts and parts[0] == "strip" and (len(parts) - 1) % 3 == 0:
                     try:
                         vs = [int(x) for x in parts[1:]]
                     except ValueError:

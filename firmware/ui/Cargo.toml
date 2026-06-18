@@ -3,4 +3,17 @@ name = "buddies-ui"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+# Display panel selection. Default is the 536x240 RM67162 QSPI AMOLED dev
+# module; build with `--no-default-features --features panel-256x64` for the
+# smaller bring-up panel.
+default = ["panel-rm67162"]
+panel-256x64 = []
+panel-rm67162 = []
+
 [dependencies]
+embedded-graphics = "0.8"
+heapless = "0.8"
+
+[dev-dependencies]
+png = "0.17"
