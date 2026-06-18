@@ -191,25 +191,6 @@ wheels = [
 ]
 
 [[package]]
-name = "hardware"
-version = "0.1.0"
-source = { virtual = "." }
-dependencies = [
-    { name = "build123d" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "yacv-server" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "build123d", specifier = ">=0.10.0" }]
-
-[package.metadata.requires-dev]
-dev = [{ name = "yacv-server", specifier = ">=0.11.1" }]
-
-[[package]]
 name = "ipython"
 version = "9.14.1"
 source = { registry = "https://pypi.org/simple" }
@@ -341,6 +322,25 @@ sdist = { url = "https://files.pythonhosted.org/packages/bd/c0/9f7c9a46090390368
 wheels = [
     { url = "https://files.pythonhosted.org/packages/41/09/5b161152e2d90f7b87f781c2e1267494aef9c32498df793f73ad0a0a494a/matplotlib_inline-0.2.2-py3-none-any.whl", hash = "sha256:3c821cf1c209f59fb2d2d64abbf5b23b67bcb2210d663f9918dd851c6da1fcf6", size = 9534, upload-time = "2026-05-08T17:33:32.055Z" },
 ]
+
+[[package]]
+name = "mechanical"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "build123d" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "yacv-server" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "build123d", specifier = ">=0.10.0" }]
+
+[package.metadata.requires-dev]
+dev = [{ name = "yacv-server", specifier = ">=0.11.1" }]
 
 [[package]]
 name = "mpmath"
