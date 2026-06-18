@@ -1,2 +1,3 @@
-# Build artifacts (regenerated from enclosure.py / cube.py)
+# Generated meshes
 *.stl
+*.glb
