@@ -1,7 +1,8 @@
 """Fuse the housing and its mounted parts into the buddy Compound.
 
-Child order is fixed: housing, then ceramics, windows, sight window, OLED.
-The glTF node names are assigned by this order, so keep it stable.
+The assembly nests into groups that mirror the modules: housing on its own,
+the acoustic elements under "acoustics", the display stack under "display".
+That nesting is what shapes the exported glTF tree.
 """
 from build123d import Compound
 
@@ -14,7 +15,6 @@ def build_buddy():
     housing = build_housing()
     ceramics, windows = build_acoustics()
     sight_window, oled = build_display()
-    return Compound(
-        label="buddy",
-        children=[housing, *ceramics, *windows, sight_window, oled],
-    )
+    acoustics = Compound(label="acoustics", children=[*ceramics, *windows])
+    display = Compound(label="display", children=[sight_window, oled])
+    return Compound(label="buddy", children=[housing, acoustics, display])
