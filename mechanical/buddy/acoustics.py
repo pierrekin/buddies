@@ -4,9 +4,10 @@ Each element is a hollow radial-mode PZT ceramic wrapped in a rho-c urethane
 window over its OD and top cap; the open bore is air-backed through the collar.
 Per element, inside out:  bore air | ceramic | urethane window | sea water.
 """
-from build123d import Align, Color, Cylinder
+from build123d import Align, Cylinder
 
 from . import dimensions as d
+from . import materials as m
 
 
 def build_acoustics():
@@ -23,8 +24,8 @@ def build_acoustics():
         # part an identity location so the glTF exporter can name it
         cer = ceramic.translate((x, y, d.TUBE_Z))
         win = window.translate((x, y, d.TUBE_Z))
-        cer.label, cer.color = f"pzt_ceramic_{i}", Color(0.80, 0.80, 0.82)
-        win.label, win.color = f"pzt_window_{i}", Color(0.30, 0.50, 0.90, 0.50)
+        cer.label, cer.color = f"pzt_ceramic_{i}", m.CERAMIC.color
+        win.label, win.color = f"pzt_window_{i}", m.URETHANE.color
         ceramics.append(cer)
         windows.append(win)
     return ceramics, windows

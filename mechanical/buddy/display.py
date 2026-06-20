@@ -3,9 +3,10 @@
 These are the separate solids that sit in the +Y wall pocket; the pocket and
 bezel themselves are cut into the housing.
 """
-from build123d import Box, Color, chamfer
+from build123d import Box, chamfer
 
 from . import dimensions as d
+from . import materials as m
 
 
 def build_display():
@@ -18,6 +19,6 @@ def build_display():
     oled = Box(d.DISP_W, d.DISP_T, d.DISP_H).translate(
         (0, d.Y_FACE - d.WIN_GLASS_T - d.DISP_AIR - d.DISP_T / 2, d.DISP_Z))
 
-    sight_window.label, sight_window.color = "sight_window", Color(0.40, 0.60, 0.90, 0.35)
-    oled.label, oled.color = "oled", Color(0.05, 0.05, 0.07)
+    sight_window.label, sight_window.color = "sight_window", m.GLASS.color
+    oled.label, oled.color = "oled", m.OLED.color
     return sight_window, oled

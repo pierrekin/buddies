@@ -12,6 +12,8 @@ from pathlib import Path
 
 from build123d import export_gltf
 
+from . import materials
+
 DIST = Path(__file__).resolve().parent.parent / "dist"
 
 # node transform fields; OCCT omits them entirely when identity
@@ -80,7 +82,9 @@ def _retree(path, buddy):
         kept = {"name": label, "mesh": nodes[i]["mesh"]}
         kept.update({k: nodes[i][k] for k in _TRS if k in nodes[i]})
         leaf_node[label] = kept
-        js["meshes"][nodes[i]["mesh"]]["name"] = label
+        mesh = js["meshes"][nodes[i]["mesh"]]
+        mesh["name"] = label
+        _name_material(js, mesh, label)
 
     new_nodes = []
 
@@ -100,6 +104,21 @@ def _retree(path, buddy):
     scene["nodes"] = [root_idx]
     js["nodes"] = new_nodes
     _write_glb(path, js, binchunk)
+
+
+def _name_material(js, mesh, label):
+    """Rename the glTF material(s) this mesh uses to the part's semantic class.
+
+    OCCT dedupes materials by colour, so all parts of a class share one material
+    and this just renames it (idempotently) to e.g. 'urethane'. That name is the
+    stable handle Blender keys its PBR material off of.
+    """
+    mat = materials.material_for_label(label)
+    if mat is None:
+        return
+    for prim in mesh.get("primitives", []):
+        if "material" in prim:
+            js["materials"][prim["material"]]["name"] = mat.name
 
 
 def _read_glb(path):

@@ -10,7 +10,6 @@ from build123d import (
     Align,
     Axis,
     Box,
-    Color,
     Cylinder,
     Plane,
     Polyline,
@@ -24,6 +23,7 @@ from build123d import (
 )
 
 from . import dimensions as d
+from . import materials as m
 
 
 def _under_z(y):
@@ -41,7 +41,7 @@ def build_housing():
     body = _add_ears(body)
     body = _add_collars(body)
 
-    body.label, body.color = "housing", Color(0.25, 0.27, 0.30)
+    body.label, body.color = "housing", m.HOUSING.color
     return body
 
 

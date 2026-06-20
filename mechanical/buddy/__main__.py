@@ -7,7 +7,7 @@ import os
 
 from . import dimensions as d
 from .assembly import build_buddy
-from .export import export_all
+from .export import DIST, export_all
 
 
 def main():
@@ -38,7 +38,9 @@ def _maybe_serve(buddy):
         return
     try:
         from yacv_server import show
-        show(*buddy.children)
+        # feed yacv the exported glb bytes: it ingests glTF directly, keeping the
+        # node tree and per-part materials instead of re-tessellating flat.
+        show((DIST / "assembly.glb").read_bytes(), names=["buddy"])
         print("yacv: serving at http://localhost:32323")
     except Exception as exc:
         print("yacv unavailable:", exc)

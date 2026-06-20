@@ -46,6 +46,22 @@ def _swap_mesh(dst, new_mesh):
         dst.material_slots[i].material = mat
 
 
+def _adopt_class_materials(obj):
+    """Point a freshly-added part at the existing authored material for its class.
+
+    The exporter names each glTF material after its class (urethane, housing...),
+    so the import arrives carrying that name. If a material of that name already
+    exists (the one you authored PBR on), re-point the slot at it; Blender's
+    import-time '.001' duplicate is then orphaned and purged below.
+    """
+    for slot in obj.material_slots:
+        if slot.material is None:
+            continue
+        canonical = bpy.data.materials.get(_base(slot.material.name))
+        if canonical is not None and canonical is not slot.material:
+            slot.material = canonical
+
+
 def sync():
     if GLB is None:
         raise FileNotFoundError("assembly.glb not found; run `uv run -m buddy` first")
@@ -66,6 +82,7 @@ def sync():
             trash.append(obj)              # mesh borrowed; drop the carrier object
         else:
             obj.name = _base(obj.name)
+            _adopt_class_materials(obj)    # hook new part to its class's material
             added.append(obj.name)         # genuinely new part, keep it
 
     for obj in trash:
