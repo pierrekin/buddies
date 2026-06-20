@@ -1,0 +1,223 @@
+"""Resonant 1-bit PZT drive (product generation), real BOM. atopile 0.15.
+
+    battery -> MT3608 boost (~13 V rail) -> EG2104 x2 -> AO3400A full bridge
+            -> series L_match -> PZT (via JST connector)
+
+All parts are real LCSC lines: ICs/FETs/diodes/connectors are atomic parts under
+parts/ (created via `ato create part`); R/L/C auto-pick from constraints. Operating
+point (Q~5, ~620 uH, ~13 V, low-current FETs, overdrive + anti-phase braking) is
+from simulation/notes/tx_resonant_keying.
+"""
+
+import ElectricPower
+import Resistor
+import Capacitor
+import Inductor
+from "parts.ato" import PiezoTransducer
+from "parts/Alpha___Omega_Semicon_AO3400A/Alpha___Omega_Semicon_AO3400A.ato" import Alpha___Omega_Semicon_AO3400A_package
+from "parts/EG_Micro_EG2104S/EG_Micro_EG2104S.ato" import EG_Micro_EG2104S_package
+from "parts/XI_AN_Aerosemi_Tech_MT3608/XI_AN_Aerosemi_Tech_MT3608.ato" import XI_AN_Aerosemi_Tech_MT3608_package
+from "parts/MDD_Microdiode_Electronics_SS34/MDD_Microdiode_Electronics_SS34.ato" import MDD_Microdiode_Electronics_SS34_package
+from "parts/ST_1N4148W/ST_1N4148W.ato" import ST_1N4148W_package
+from "parts/JST_Sales_America_B2B_PH_K_S_LF__SN/JST_Sales_America_B2B_PH_K_S_LF__SN.ato" import JST_Sales_America_B2B_PH_K_S_LF__SN_package
+from "parts/JST_Sales_America_B5B_PH_K_S_LF__SN/JST_Sales_America_B5B_PH_K_S_LF__SN.ato" import JST_Sales_America_B5B_PH_K_S_LF__SN_package
+
+
+module AdjustableBoost:
+    """MT3608 boost: 1S/2S Li-ion -> ~13 V. Vout = 0.6 V * (1 + r_top/r_bot); r_inj
+    from `vset` into FB is the MCU amplitude / TX-power knob (tx_resonant_keying).
+    """
+    batt = new ElectricPower      # vin ~3.0-8.4 V
+    rail = new ElectricPower      # vout ~13 V
+    signal enable
+    signal vset
+
+    ic = new XI_AN_Aerosemi_Tech_MT3608_package
+    l = new Inductor
+    d = new MDD_Microdiode_Electronics_SS34_package   # catch Schottky
+    cin = new Capacitor
+    cout = new Capacitor
+    r_top = new Resistor
+    r_bot = new Resistor
+    r_inj = new Resistor          # vset -> FB (amplitude trim)
+
+    batt.gnd ~ rail.gnd
+    # input
+    batt.vcc ~ ic.IN
+    batt.gnd ~ ic.GND
+    batt.vcc ~ cin.unnamed[0]; cin.unnamed[1] ~ batt.gnd
+    ic.EN ~ enable
+    # boost power path: Vin -> L -> SW -> Schottky -> Vout
+    batt.vcc ~ l.unnamed[0]
+    l.unnamed[1] ~ ic.SW
+    ic.SW ~ d.A
+    d.K ~ rail.vcc
+    rail.vcc ~ cout.unnamed[0]; cout.unnamed[1] ~ rail.gnd
+    # feedback divider + injection
+    rail.vcc ~ r_top.unnamed[0]; r_top.unnamed[1] ~ ic.FB
+    ic.FB ~ r_bot.unnamed[0]; r_bot.unnamed[1] ~ rail.gnd
+    vset ~ r_inj.unnamed[0]; r_inj.unnamed[1] ~ ic.FB
+
+    l.inductance = 10uH +/- 20%
+    assert l.max_current within 1.5A to 100A      # MT3608 2 A switch
+    cin.capacitance = 10uF +/- 20%
+    assert cin.max_voltage within 16V to 100V
+    cout.capacitance = 22uF +/- 20%
+    assert cout.max_voltage within 25V to 100V
+    r_top.resistance = 200kohm +/- 1%             # 0.6*(1+200k/10k) ~ 12.6 V
+    r_bot.resistance = 10kohm +/- 1%
+    r_inj.resistance = 100kohm +/- 1%
+
+
+module BridgeGateDriver:
+    """Two EG2104 half-bridge drivers (one per leg). Each: IN = its PWM, nSD = enable,
+    VS = its leg midpoint (high-side reference), HO/LO via gate resistors. Bootstrap =
+    1N4148W from VCC to VB + cap VB->VS. Dead-time / shoot-through is internal to the IC.
+    """
+    vdd = new ElectricPower        # VCC (battery rail; logic-level FETs)
+    signal in_a
+    signal in_b
+    signal enable
+    signal g_ah
+    signal g_al
+    signal g_bh
+    signal g_bl
+    signal vs_a                    # leg-A midpoint (high-side ref)
+    signal vs_b
+
+    drv_a = new EG_Micro_EG2104S_package
+    drv_b = new EG_Micro_EG2104S_package
+    cboot_a = new Capacitor
+    cboot_b = new Capacitor
+    dboot_a = new ST_1N4148W_package
+    dboot_b = new ST_1N4148W_package
+    rg_ah = new Resistor
+    rg_al = new Resistor
+    rg_bh = new Resistor
+    rg_bl = new Resistor
+
+    # supplies + inputs
+    vdd.vcc ~ drv_a.VCC; vdd.gnd ~ drv_a.GND
+    vdd.vcc ~ drv_b.VCC; vdd.gnd ~ drv_b.GND
+    in_a ~ drv_a.IN; enable ~ drv_a.nSD
+    in_b ~ drv_b.IN; enable ~ drv_b.nSD
+
+    # leg A: high-side ref, bootstrap, gate resistors
+    drv_a.VS ~ vs_a
+    vdd.vcc ~ dboot_a.A; dboot_a.K ~ drv_a.VB
+    drv_a.VB ~ cboot_a.unnamed[0]; cboot_a.unnamed[1] ~ drv_a.VS
+    drv_a.HO ~ rg_ah.unnamed[0]; rg_ah.unnamed[1] ~ g_ah
+    drv_a.LO ~ rg_al.unnamed[0]; rg_al.unnamed[1] ~ g_al
+
+    # leg B
+    drv_b.VS ~ vs_b
+    vdd.vcc ~ dboot_b.A; dboot_b.K ~ drv_b.VB
+    drv_b.VB ~ cboot_b.unnamed[0]; cboot_b.unnamed[1] ~ drv_b.VS
+    drv_b.HO ~ rg_bh.unnamed[0]; rg_bh.unnamed[1] ~ g_bh
+    drv_b.LO ~ rg_bl.unnamed[0]; rg_bl.unnamed[1] ~ g_bl
+
+    cboot_a.capacitance = 100nF +/- 20%
+    cboot_b.capacitance = 100nF +/- 20%
+    for rg in [rg_ah, rg_al, rg_bh, rg_bl]:
+        rg.resistance = 10ohm +/- 5%
+
+
+module FullBridge:
+    """Four AO3400A N-FETs, two legs. Differential output across the leg midpoints."""
+    power = new ElectricPower
+    signal out_p
+    signal out_n
+    signal g_ah
+    signal g_al
+    signal g_bh
+    signal g_bl
+
+    qah = new Alpha___Omega_Semicon_AO3400A_package
+    qal = new Alpha___Omega_Semicon_AO3400A_package
+    qbh = new Alpha___Omega_Semicon_AO3400A_package
+    qbl = new Alpha___Omega_Semicon_AO3400A_package
+
+    # leg A
+    power.vcc ~ qah.D; qah.S ~ out_p
+    out_p ~ qal.D;     qal.S ~ power.gnd
+    # leg B
+    power.vcc ~ qbh.D; qbh.S ~ out_n
+    out_n ~ qbl.D;     qbl.S ~ power.gnd
+    # gates
+    g_ah ~ qah.G; g_al ~ qal.G; g_bh ~ qbh.G; g_bl ~ qbl.G
+
+
+module ResonantDriveChannel:
+    """Gate driver + full bridge + series-resonant tank + local rail reservoir.
+    Replicate off the shared rail per element (4-6 channels)."""
+    rail = new ElectricPower
+    vdd_logic = new ElectricPower
+    signal pwm_a
+    signal pwm_b
+    signal enable
+
+    driver = new BridgeGateDriver
+    bridge = new FullBridge
+    l_match = new Inductor
+    pz = new PiezoTransducer
+    pz_conn = new JST_Sales_America_B2B_PH_K_S_LF__SN_package
+    c_bulk = new Capacitor
+    c_hf = new Capacitor
+
+    # power
+    rail ~ bridge.power
+    rail.vcc ~ c_bulk.unnamed[0]; c_bulk.unnamed[1] ~ rail.gnd
+    rail.vcc ~ c_hf.unnamed[0];   c_hf.unnamed[1] ~ rail.gnd
+    vdd_logic ~ driver.vdd
+
+    # logic + gate routing
+    pwm_a ~ driver.in_a
+    pwm_b ~ driver.in_b
+    enable ~ driver.enable
+    driver.g_ah ~ bridge.g_ah
+    driver.g_al ~ bridge.g_al
+    driver.g_bh ~ bridge.g_bh
+    driver.g_bl ~ bridge.g_bl
+    driver.vs_a ~ bridge.out_p     # high-side reference = leg midpoint
+    driver.vs_b ~ bridge.out_n
+
+    # series-resonant tank: out_p -> L -> PZT (via connector) -> out_n
+    bridge.out_p ~ l_match.unnamed[0]
+    l_match.unnamed[1] ~ pz_conn.1
+    pz_conn.1 ~ pz.p1
+    pz.p2 ~ pz_conn.2
+    pz_conn.2 ~ bridge.out_n
+
+    l_match.inductance = 620uH +/- 20%
+    assert l_match.max_current within 0.4A to 100A
+    c_bulk.capacitance = 100uF +/- 20%
+    assert c_bulk.max_voltage within 25V to 100V
+    c_hf.capacitance = 1uF +/- 10%
+    assert c_hf.max_voltage within 25V to 100V
+    pz.c0 = 5nF +/- 20%
+    pz.fr = 90kHz +/- 5%
+
+
+module ResonantDriveBoard:
+    """Top: battery -> shared MT3608 boost -> one resonant drive channel.
+    Replicate `ch` + fan out the logic header to scale to 4-6 elements."""
+    batt = new JST_Sales_America_B2B_PH_K_S_LF__SN_package    # pin1 V+, pin2 GND
+    logic = new JST_Sales_America_B5B_PH_K_S_LF__SN_package   # pwm_a/pwm_b/en/vset/gnd
+    boost = new AdjustableBoost
+    ch = new ResonantDriveChannel
+
+    # battery in
+    batt.1 ~ boost.batt.vcc
+    batt.2 ~ boost.batt.gnd
+
+    # shared rail to channel; gate-drive supply from the battery rail
+    boost.rail ~ ch.rail
+    boost.batt ~ ch.vdd_logic
+
+    # MCU control header
+    logic.1 ~ ch.pwm_a
+    logic.2 ~ ch.pwm_b
+    logic.3 ~ ch.enable
+    logic.3 ~ boost.enable
+    logic.4 ~ boost.vset
+    logic.5 ~ batt.2

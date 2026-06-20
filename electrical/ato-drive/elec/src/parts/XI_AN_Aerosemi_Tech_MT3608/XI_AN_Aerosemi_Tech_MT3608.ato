@@ -1,0 +1,24 @@
+import has_datasheet
+import has_designator_prefix
+import has_part_picked
+import is_atomic_part
+import is_auto_generated
+
+component XI_AN_Aerosemi_Tech_MT3608_package:
+    """MT3608"""
+
+    # This trait marks this file as auto-generated
+    # If you want to manually change it, remove the trait
+    trait is_auto_generated<system="ato_part", source="easyeda:C84817", date="2026-06-20T15:34:20.199163+00:00", checksum="47fa40be362f532df1c58b15feaf5d5d34bf72560984d073d89df17241d1838e">
+
+    trait is_atomic_part<manufacturer="XI'AN Aerosemi Tech", partnumber="MT3608", footprint="SOT-23-6_L2.9-W1.6-P0.95-LS2.8-BL.kicad_mod", symbol="MT3608.kicad_sym", model="SOT-23-6_L2.9-W1.6-H1.5-LS2.8-P0.95.step">
+    trait has_part_picked::by_supplier<supplier_id="lcsc", supplier_partno="C84817", manufacturer="XI'AN Aerosemi Tech", partno="MT3608">
+    trait has_designator_prefix<prefix="U">
+    trait has_datasheet<datasheet="https://www.lcsc.com/datasheet/lcsc_datasheet_1811151539_XI-AN-Aerosemi-Tech-MT3608_C84817.pdf">
+
+    # pins
+    signal EN ~ pin 4
+    signal FB ~ pin 3
+    signal GND ~ pin 2
+    signal IN ~ pin 5
+    signal SW ~ pin 1

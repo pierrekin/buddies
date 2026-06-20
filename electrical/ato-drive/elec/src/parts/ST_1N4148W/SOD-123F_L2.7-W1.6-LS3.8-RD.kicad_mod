@@ -1,0 +1,126 @@
+(footprint "ST_1N4148W:SOD-123F_L2.7-W1.6-LS3.8-RD"
+	(version 20241229)
+	(generator "faebryk_convert")
+	(generator_version "v5")
+	(layer "F.Cu")
+	(tedit "5DC5F6A4")
+	(uuid "1a1bddee-a159-445b-bdab-eaf0272619a1")
+	(property "Reference" "REF**"
+		(at 0 -4)
+		(layer "F.SilkS")
+		(uuid "4181c77c-f2db-4563-879b-c02f18f3a69a")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Value" "SOD-123F_L2.7-W1.6-LS3.8-RD"
+		(at 0 4)
+		(layer "F.Fab")
+		(uuid "dae2889d-6991-494f-b6bf-1c82ca849dd9")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(attr smd)
+	(fp_circle
+		(center -1.9 0.8)
+		(end -1.87 0.8)
+		(stroke
+			(width 0.06)
+			(type solid)
+		)
+		(layer "F.Fab")
+		(locked no)
+		(uuid "66c87a22-5944-4b91-9a23-1f2b6f3311fb")
+	)
+	(fp_line
+		(start -1.38 0.92)
+		(end 1.37 0.92)
+		(stroke
+			(width 0.15)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(layers "F.SilkS")
+		(locked no)
+		(uuid "258aef9c-b1b7-4052-a06d-6c5dcfba4422")
+	)
+	(fp_line
+		(start -1.38 -0.92)
+		(end 1.37 -0.92)
+		(stroke
+			(width 0.15)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(layers "F.SilkS")
+		(locked no)
+		(uuid "058db395-628f-4879-ba85-a720782b8fe4")
+	)
+	(fp_line
+		(start 1.37 -0.92)
+		(end 1.37 -0.74)
+		(stroke
+			(width 0.15)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(layers "F.SilkS")
+		(locked no)
+		(uuid "84229a94-374f-4b08-9317-2862c6ac04ba")
+	)
+	(fp_line
+		(start 1.37 0.92)
+		(end 1.37 0.74)
+		(stroke
+			(width 0.15)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(layers "F.SilkS")
+		(locked no)
+		(uuid "a6bcec66-56eb-409f-92dc-a4b1d4ad96ba")
+	)
+	(fp_line
+		(start -0.92 -0.88)
+		(end -0.92 0.88)
+		(stroke
+			(width 0.15)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(layers "F.SilkS")
+		(locked no)
+		(uuid "2f6a697b-d1b3-4511-a69f-11fbc76bdb36")
+	)
+	(pad "2" smd rect
+		(at 1.73 0 0)
+		(size 1.1 1)
+		(layers "F.Cu" "F.Paste" "F.Mask")
+		(uuid "036b042a-9f8c-4a62-8897-64dcd5974ef0")
+	)
+	(pad "1" smd rect
+		(at -1.73 0 0)
+		(size 1.1 1)
+		(layers "F.Cu" "F.Paste" "F.Mask")
+		(uuid "55d8af82-f22f-4192-bf9c-250693137a56")
+	)
+	(model "${KIPRJMOD}/../../src/parts/ST_1N4148W/SOD-123F_L2.7-W1.6-LS3.8-RD.step"
+		(offset
+			(xyz 0 0 -0)
+		)
+		(scale
+			(xyz 1 1 1)
+		)
+		(rotate
+			(xyz 0 0 0)
+		)
+	)
+	(embedded_fonts no)
+)

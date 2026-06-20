@@ -1,0 +1,21 @@
+import has_datasheet
+import has_designator_prefix
+import has_part_picked
+import is_atomic_part
+import is_auto_generated
+
+component ST_1N4148W_package:
+    """1N4148W"""
+
+    # This trait marks this file as auto-generated
+    # If you want to manually change it, remove the trait
+    trait is_auto_generated<system="ato_part", source="easyeda:C81598", date="2026-06-20T15:37:20.890934+00:00", checksum="2ba714e280f56be3fdc09f5afee0a856ef7eb0d1f62c942fe6bfa1a2e99613c4">
+
+    trait is_atomic_part<manufacturer="ST", partnumber="1N4148W", footprint="SOD-123F_L2.7-W1.6-LS3.8-RD.kicad_mod", symbol="1N4148W_C81598.kicad_sym", model="SOD-123F_L2.7-W1.6-LS3.8-RD.step">
+    trait has_part_picked::by_supplier<supplier_id="lcsc", supplier_partno="C81598", manufacturer="ST", partno="1N4148W">
+    trait has_designator_prefix<prefix="D">
+    trait has_datasheet<datasheet="https://www.lcsc.com/datasheet/lcsc_datasheet_1811061725_ST-Semtech-1N4148W_C81598.pdf">
+
+    # pins
+    signal A ~ pin 2
+    signal K ~ pin 1

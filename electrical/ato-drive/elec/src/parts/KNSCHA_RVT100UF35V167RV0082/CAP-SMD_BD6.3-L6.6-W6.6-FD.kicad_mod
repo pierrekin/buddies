@@ -1,0 +1,162 @@
+(footprint "KNSCHA_RVT100UF35V167RV0082:CAP-SMD_BD6.3-L6.6-W6.6-FD"
+	(version 20241229)
+	(generator "faebryk_convert")
+	(generator_version "v5")
+	(layer "F.Cu")
+	(tedit "5DC5F6A4")
+	(uuid "c0233dff-821f-467e-ae71-a2e96b74e48a")
+	(property "Reference" "REF**"
+		(at 0 -4)
+		(layer "F.SilkS")
+		(uuid "98bac29d-0605-4868-a544-66a573cfc0c6")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Value" "CAP-SMD_BD6.3-L6.6-W6.6-FD"
+		(at 0 4)
+		(layer "F.Fab")
+		(uuid "b5ce252a-f716-4359-873b-70d67c33a82a")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(attr smd)
+	(fp_circle
+		(center -3.63 3.3)
+		(end -3.6 3.3)
+		(stroke
+			(width 0.06)
+			(type solid)
+		)
+		(layer "F.Fab")
+		(locked no)
+		(uuid "1a0544ac-ebec-4278-b679-5e7cc8ed9964")
+	)
+	(fp_line
+		(start 3.36 0.74)
+		(end 3.38 3.38)
+		(stroke
+			(width 0.15)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(layers "F.SilkS")
+		(locked no)
+		(uuid "8c2f6a40-5ed4-4b44-89d1-b124cff6cb2b")
+	)
+	(fp_line
+		(start 3.38 3.38)
+		(end -1.98 3.38)
+		(stroke
+			(width 0.15)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(layers "F.SilkS")
+		(locked no)
+		(uuid "53eba076-fff6-41e2-9aa9-e74db0e8401e")
+	)
+	(fp_line
+		(start -1.98 3.38)
+		(end -3.38 1.98)
+		(stroke
+			(width 0.15)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(layers "F.SilkS")
+		(locked no)
+		(uuid "8a51d870-eb53-4205-9537-10723fd52dba")
+	)
+	(fp_line
+		(start -3.38 1.98)
+		(end -3.36 0.69)
+		(stroke
+			(width 0.15)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(layers "F.SilkS")
+		(locked no)
+		(uuid "fdc88359-a282-4f27-a397-c017dd38ef69")
+	)
+	(fp_line
+		(start 3.37 -0.71)
+		(end 3.38 -3.38)
+		(stroke
+			(width 0.15)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(layers "F.SilkS")
+		(locked no)
+		(uuid "43a670b3-13d0-45fd-bc39-5f1753f3fa3d")
+	)
+	(fp_line
+		(start 3.38 -3.38)
+		(end -1.98 -3.38)
+		(stroke
+			(width 0.15)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(layers "F.SilkS")
+		(locked no)
+		(uuid "c3cdd4ee-4417-480b-8547-0884c6a0b6da")
+	)
+	(fp_line
+		(start -1.98 -3.38)
+		(end -3.38 -1.98)
+		(stroke
+			(width 0.15)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(layers "F.SilkS")
+		(locked no)
+		(uuid "8ce80adb-2581-44a9-b9a8-a55396b76875")
+	)
+	(fp_line
+		(start -3.38 -1.98)
+		(end -3.38 -0.69)
+		(stroke
+			(width 0.15)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(layers "F.SilkS")
+		(locked no)
+		(uuid "119ab4db-8ddf-497b-9648-2b2904355a08")
+	)
+	(pad "1" smd rect
+		(at -2.67 0 0)
+		(size 3.5 1.2)
+		(layers "F.Cu" "F.Paste" "F.Mask")
+		(uuid "8bc5e9c3-1665-4fd5-8ab1-034e3e02403c")
+	)
+	(pad "2" smd rect
+		(at 2.67 0 0)
+		(size 3.5 1.2)
+		(layers "F.Cu" "F.Paste" "F.Mask")
+		(uuid "096a4e35-cc7e-4040-a22a-480d8b0b233b")
+	)
+	(model "${KIPRJMOD}/../../src/parts/KNSCHA_RVT100UF35V167RV0082/CAP-SMD_BD6.3-L6.6-W6.6-FD.step"
+		(offset
+			(xyz 0 0 -0)
+		)
+		(scale
+			(xyz 1 1 1)
+		)
+		(rotate
+			(xyz 0 0 180)
+		)
+	)
+	(embedded_fonts no)
+)

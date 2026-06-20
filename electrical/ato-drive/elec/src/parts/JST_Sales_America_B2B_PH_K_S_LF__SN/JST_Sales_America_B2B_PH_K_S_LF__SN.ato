@@ -1,0 +1,19 @@
+import has_datasheet
+import has_designator_prefix
+import has_part_picked
+import is_atomic_part
+import is_auto_generated
+
+component JST_Sales_America_B2B_PH_K_S_LF__SN_package:
+    # This trait marks this file as auto-generated
+    # If you want to manually change it, remove the trait
+    trait is_auto_generated<system="ato_part", source="easyeda:C131337", date="2026-06-20T15:32:45.526371+00:00", checksum="9193674fcca2f35b044dda258934d8544f89ab18f36c2c77e08a11d09443bbaf">
+
+    trait is_atomic_part<manufacturer="JST Sales America", partnumber="B2B-PH-K-S(LF)(SN)", footprint="CONN-TH_B2B-PH-K-S.kicad_mod", symbol="B2B-PH-K-S(LF)(SN).kicad_sym", model="CONN-TH_PH2.00-LI-2P.step">
+    trait has_part_picked::by_supplier<supplier_id="lcsc", supplier_partno="C131337", manufacturer="JST Sales America", partno="B2B-PH-K-S(LF)(SN)">
+    trait has_designator_prefix<prefix="CN">
+    trait has_datasheet<datasheet="https://www.lcsc.com/datasheet/lcsc_datasheet_2304140030_JST-B2B-PH-K-S-LF-SN_C131337.pdf">
+
+    # pins
+    pin 1
+    pin 2

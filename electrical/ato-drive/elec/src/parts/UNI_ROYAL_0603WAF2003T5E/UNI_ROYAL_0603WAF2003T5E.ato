@@ -1,0 +1,21 @@
+import has_datasheet
+import has_designator_prefix
+import has_part_picked
+import is_atomic_part
+import is_auto_generated
+
+component UNI_ROYAL_0603WAF2003T5E_package:
+    """200KΩ (2003) ±1%"""
+
+    # This trait marks this file as auto-generated
+    # If you want to manually change it, remove the trait
+    trait is_auto_generated<system="ato_part", source="easyeda:C25811", date="2026-06-20T15:40:35.548456+00:00", checksum="9dcf7ce5db111b50016eb3a706102ebbe45dea90267c346c67b6f75c26416c85">
+
+    trait is_atomic_part<manufacturer="UNI-ROYAL", partnumber="0603WAF2003T5E", footprint="R0603.kicad_mod", symbol="0603WAF2003T5E.kicad_sym", model="R0603.STEP">
+    trait has_part_picked::by_supplier<supplier_id="lcsc", supplier_partno="C25811", manufacturer="UNI-ROYAL", partno="0603WAF2003T5E">
+    trait has_designator_prefix<prefix="R">
+    trait has_datasheet<datasheet="https://www.lcsc.com/datasheet/lcsc_datasheet_2206010045_UNI-ROYAL-Uniroyal-Elec-0603WAF2003T5E_C25811.pdf">
+
+    # pins
+    pin 2
+    pin 1

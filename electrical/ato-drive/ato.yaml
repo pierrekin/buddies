@@ -1,0 +1,9 @@
+requires-atopile: "0.15.7"
+
+paths:
+  src: elec/src
+  layout: elec/layout
+
+builds:
+  default:
+    entry: elec/src/drive.ato:ResonantDriveBoard

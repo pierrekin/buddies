@@ -1,0 +1,113 @@
+(footprint "Sunltech_Tech_SLP0810R_561KTT:IND-TH_BD9.5-P5.00-D0.7"
+	(version 20241229)
+	(generator "faebryk_convert")
+	(generator_version "v5")
+	(layer "F.Cu")
+	(tedit "5DC5F6A4")
+	(uuid "8e133e08-ea52-4365-9c3a-5ea172535163")
+	(property "Reference" "REF**"
+		(at 0 -4)
+		(layer "F.SilkS")
+		(uuid "a9688683-8ea8-4503-9716-726460922c2a")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Value" "IND-TH_BD9.5-P5.00-D0.7"
+		(at 0 4)
+		(layer "F.Fab")
+		(uuid "23a4f15a-885a-4314-8000-01416de90503")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(attr through_hole)
+	(fp_circle
+		(center -4.75 4.75)
+		(end -4.72 4.75)
+		(stroke
+			(width 0.06)
+			(type solid)
+		)
+		(layer "F.Fab")
+		(locked no)
+		(uuid "fcf5be53-99d1-453f-8aeb-38ac3f2b84b5")
+	)
+	(fp_circle
+		(center 2.5 0)
+		(end 2.68 0)
+		(stroke
+			(width 0.35)
+			(type solid)
+		)
+		(layer "F.Fab")
+		(locked no)
+		(uuid "22646780-ecbb-45de-aafc-82038e2fa700")
+	)
+	(fp_circle
+		(center -2.5 0)
+		(end -2.32 0)
+		(stroke
+			(width 0.35)
+			(type solid)
+		)
+		(layer "F.Fab")
+		(locked no)
+		(uuid "6b002f8b-4c74-46d2-93d3-3d884db8f774")
+	)
+	(fp_circle
+		(center -0 0)
+		(end 4.75 0)
+		(stroke
+			(width 0.25)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(locked no)
+		(uuid "dc8cd9a0-87ea-4f47-9b95-5d31dc54fe02")
+	)
+	(fp_rect
+		(start -4.75 -4.75)
+		(end 4.75 4.75)
+		(stroke
+			(width 0.12)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.SilkS")
+		(locked no)
+		(uuid "a1b2c3d4-0000-4000-8000-000000000001")
+	)
+	(pad "1" thru_hole circle
+		(at -2.5 0 180)
+		(size 1.6 1.6)
+		(drill 0.9000236)
+		(layers "*.Cu" "*.Mask")
+		(uuid "372f3cff-9cce-476e-a1e1-3932c6540449")
+	)
+	(pad "2" thru_hole circle
+		(at 2.5 0 180)
+		(size 1.6 1.6)
+		(drill 0.9000236)
+		(layers "*.Cu" "*.Mask")
+		(uuid "eb1ca495-db7a-4156-944b-83a95766044d")
+	)
+	(model "${KIPRJMOD}/../../src/parts/Sunltech_Tech_SLP0810R_561KTT/IND-TH_BD9.5-H12.5-P5.00-D0.7.step"
+		(offset
+			(xyz -0 -0 0)
+		)
+		(scale
+			(xyz 1 1 1)
+		)
+		(rotate
+			(xyz 0 0 270)
+		)
+	)
+	(embedded_fonts no)
+)

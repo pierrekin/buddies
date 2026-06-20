@@ -1,0 +1,25 @@
+import has_datasheet
+import has_designator_prefix
+import has_part_picked
+import is_atomic_part
+import is_auto_generated
+
+component EG_Micro_EG2104S_package:
+    # This trait marks this file as auto-generated
+    # If you want to manually change it, remove the trait
+    trait is_auto_generated<system="ato_part", source="easyeda:C480652", date="2026-06-20T16:45:18.552738+00:00", checksum="615f0b5d6b3c2dd6306327bcee4f41b9b9fbba88242f4570414d951fa94ccba6">
+
+    trait is_atomic_part<manufacturer="EG Micro", partnumber="EG2104S", footprint="SOIC-8_L5.0-W4.0-P1.27-LS6.0-BL.kicad_mod", symbol="EG2104S.kicad_sym", model="SOIC-8_L4.9-W3.9-H1.7-LS6.0-P1.27.STEP">
+    trait has_part_picked::by_supplier<supplier_id="lcsc", supplier_partno="C480652", manufacturer="EG Micro", partno="EG2104S">
+    trait has_designator_prefix<prefix="U">
+    trait has_datasheet<datasheet="https://www.lcsc.com/datasheet/lcsc_datasheet_2001071338_EG-Micro-EG2104S_C480652.pdf">
+
+    # pins
+    signal GND ~ pin 4
+    signal HO ~ pin 7
+    signal IN ~ pin 2
+    signal LO ~ pin 5
+    signal VB ~ pin 8
+    signal VCC ~ pin 1
+    signal VS ~ pin 6
+    signal nSD ~ pin 3

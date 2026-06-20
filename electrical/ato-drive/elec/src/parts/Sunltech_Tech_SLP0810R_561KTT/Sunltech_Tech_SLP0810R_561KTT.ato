@@ -1,0 +1,19 @@
+import has_datasheet
+import has_designator_prefix
+import has_part_picked
+import is_atomic_part
+import is_auto_generated
+
+component Sunltech_Tech_SLP0810R_561KTT_package:
+    # This trait marks this file as auto-generated
+    # If you want to manually change it, remove the trait
+    trait is_auto_generated<system="ato_part", source="easyeda:C182148", date="2026-06-20T15:20:09.290262+00:00", checksum="7348322aefd64b037d60b0852ad2c68bd717b3ae19d27f0737ca1fb1c74b828c">
+
+    trait is_atomic_part<manufacturer="Sunltech Tech", partnumber="SLP0810R-561KTT", footprint="IND-TH_BD9.5-P5.00-D0.7.kicad_mod", symbol="SLP0810R-561KTT.kicad_sym", model="IND-TH_BD9.5-H12.5-P5.00-D0.7.step">
+    trait has_part_picked::by_supplier<supplier_id="lcsc", supplier_partno="C182148", manufacturer="Sunltech Tech", partno="SLP0810R-561KTT">
+    trait has_designator_prefix<prefix="L">
+    trait has_datasheet<datasheet="https://www.lcsc.com/datasheet/lcsc_datasheet_1806131730_Sunltech-Tech-SLP0810R-561KTT_C182148.pdf">
+
+    # pins
+    pin 2
+    pin 1

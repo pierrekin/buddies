@@ -1,0 +1,16 @@
+"""Off-catalog element for the resonant PZT drive (atopile 0.15).
+
+Every other component is now a real LCSC part: the commodity passives (R/L/C)
+auto-pick from constraints, and the ICs / FETs / diodes / connectors are atomic
+parts generated under parts/ via `ato create part`. Only the transducer itself is
+not an LCSC line item (it is the external acoustic load), so it stays custom and
+is wired to the board through a real JST connector in drive.ato.
+"""
+
+component PiezoTransducer:
+    """Steminc SMC1186T10410 radial tube. External load, wired in via PiezoConn.
+    Carries the tank parameters for documentation (see tx_resonant_keying)."""
+    signal p1
+    signal p2
+    c0: F     # static capacitance Cs (resonated out by L_match)
+    fr: Hz    # series resonance

@@ -1,0 +1,19 @@
+import has_datasheet
+import has_designator_prefix
+import has_part_picked
+import is_atomic_part
+import is_auto_generated
+
+component KNSCHA_RVT100UF35V167RV0082_package:
+    # This trait marks this file as auto-generated
+    # If you want to manually change it, remove the trait
+    trait is_auto_generated<system="ato_part", source="easyeda:C5138965", date="2026-06-20T15:20:04.841768+00:00", checksum="47163087d4bbf3e95d95162a3ccad97292436218f832cf55a0c5bb79f188bfd0">
+
+    trait is_atomic_part<manufacturer="KNSCHA", partnumber="RVT100UF35V167RV0082", footprint="CAP-SMD_BD6.3-L6.6-W6.6-FD.kicad_mod", symbol="RVT100UF35V167RV0082.kicad_sym", model="CAP-SMD_BD6.3-L6.6-W6.6-FD.step">
+    trait has_part_picked::by_supplier<supplier_id="lcsc", supplier_partno="C5138965", manufacturer="KNSCHA", partno="RVT100UF35V167RV0082">
+    trait has_designator_prefix<prefix="U">
+    trait has_datasheet<datasheet="https://wmsc.lcsc.com/wmsc/upload/file/pdf/v2/lcsc/2208230930_KNSCHA-RVT100UF35V167RV0082_C5138965.pdf">
+
+    # pins
+    pin 1
+    pin 2

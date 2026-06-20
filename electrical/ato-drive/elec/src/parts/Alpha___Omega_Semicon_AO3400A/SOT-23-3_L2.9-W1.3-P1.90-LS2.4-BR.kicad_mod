@@ -1,0 +1,143 @@
+(footprint "Alpha___Omega_Semicon_AO3400A:SOT-23-3_L2.9-W1.3-P1.90-LS2.4-BR"
+	(version 20241229)
+	(generator "faebryk_convert")
+	(generator_version "v5")
+	(layer "F.Cu")
+	(tedit "5DC5F6A4")
+	(uuid "b2bb3e44-4b08-46b9-9e45-d2234c416437")
+	(property "Reference" "REF**"
+		(at 0 -4.95)
+		(layer "F.SilkS")
+		(uuid "8f3ec5df-f4f4-4fcc-be92-9da5cc976e7b")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Value" "SOT-23-3_L2.9-W1.3-P1.90-LS2.4-BR"
+		(at 0 4.95)
+		(layer "F.Fab")
+		(uuid "e95add7a-ef55-426a-a1ab-76607eb5ccef")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(attr smd)
+	(fp_circle
+		(center 1.2 1.45)
+		(end 1.23 1.45)
+		(stroke
+			(width 0.06)
+			(type solid)
+		)
+		(layer "F.Fab")
+		(locked no)
+		(uuid "825b307b-9b3c-488e-812c-eeb2fd48e019")
+	)
+	(fp_circle
+		(center 1.46 1.1)
+		(end 1.56 1.1)
+		(stroke
+			(width 0.2)
+			(type solid)
+		)
+		(layer "Cmts.User")
+		(locked no)
+		(uuid "385507e6-62a4-445e-88a3-fe1a40346b2c")
+	)
+	(fp_line
+		(start 0.73 -1.53)
+		(end -0.73 -1.53)
+		(stroke
+			(width 0.15)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(layers "F.SilkS")
+		(locked no)
+		(uuid "f9bfb245-aaf8-4d5d-8538-060402be1ff5")
+	)
+	(fp_line
+		(start -0.73 -1.53)
+		(end -0.73 -0.49)
+		(stroke
+			(width 0.15)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(layers "F.SilkS")
+		(locked no)
+		(uuid "ca2ed81d-97f8-4076-b360-37fb0f07be19")
+	)
+	(fp_line
+		(start 0.73 1.53)
+		(end -0.73 1.53)
+		(stroke
+			(width 0.15)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(layers "F.SilkS")
+		(locked no)
+		(uuid "1bf87ff2-77f4-442a-9a42-a3c60d1453b4")
+	)
+	(fp_line
+		(start -0.73 1.53)
+		(end -0.73 0.49)
+		(stroke
+			(width 0.15)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(layers "F.SilkS")
+		(locked no)
+		(uuid "9fbf833b-c50c-41c9-8e39-cd401774083f")
+	)
+	(fp_line
+		(start 0.73 -0.46)
+		(end 0.73 0.46)
+		(stroke
+			(width 0.15)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(layers "F.SilkS")
+		(locked no)
+		(uuid "97f6b067-6aaf-4a0f-8b14-6c15befae08d")
+	)
+	(pad "1" smd rect
+		(at 1 0.95 0)
+		(size 1 0.65)
+		(layers "F.Cu" "F.Paste" "F.Mask")
+		(uuid "b8d2f049-6936-49fa-8851-af1fc1a21a27")
+	)
+	(pad "2" smd rect
+		(at 1 -0.95 0)
+		(size 1 0.65)
+		(layers "F.Cu" "F.Paste" "F.Mask")
+		(uuid "6b95910e-88f7-458b-86e3-078a77b596f3")
+	)
+	(pad "3" smd rect
+		(at -1 0 0)
+		(size 1 0.65)
+		(layers "F.Cu" "F.Paste" "F.Mask")
+		(uuid "96ff68bd-c14c-4bae-ac9b-89ed2d8e41d1")
+	)
+	(model "${KIPRJMOD}/../../src/parts/Alpha___Omega_Semicon_AO3400A/SOT-23-3P_L2.9-W1.3-H1.0-LS2.4-P0.95.step"
+		(offset
+			(xyz 0 0 -0)
+		)
+		(scale
+			(xyz 1 1 1)
+		)
+		(rotate
+			(xyz 0 0 180)
+		)
+	)
+	(embedded_fonts no)
+)

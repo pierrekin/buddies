@@ -1,0 +1,22 @@
+import has_datasheet
+import has_designator_prefix
+import has_part_picked
+import is_atomic_part
+import is_auto_generated
+
+component JST_Sales_America_B5B_PH_K_S_LF__SN_package:
+    # This trait marks this file as auto-generated
+    # If you want to manually change it, remove the trait
+    trait is_auto_generated<system="ato_part", source="easyeda:C157993", date="2026-06-20T15:33:37.410046+00:00", checksum="03d73aaa8cc61bbd89682fa73086b550f504e6537b6f787dda2ec9c34bb7fc20">
+
+    trait is_atomic_part<manufacturer="JST Sales America", partnumber="B5B-PH-K-S(LF)(SN)", footprint="CONN-TH_B5B-PH-K-S-LF-SN.kicad_mod", symbol="B5B-PH-K-S-(LF)(SN).kicad_sym", model="CONN-TH_PH2.00-LI-5P.step">
+    trait has_part_picked::by_supplier<supplier_id="lcsc", supplier_partno="C157993", manufacturer="JST Sales America", partno="B5B-PH-K-S(LF)(SN)">
+    trait has_designator_prefix<prefix="U">
+    trait has_datasheet<datasheet="https://www.lcsc.com/datasheet/lcsc_datasheet_2304140030_JST-B5B-PH-K-S-LF-SN_C157993.pdf">
+
+    # pins
+    pin 1
+    pin 2
+    pin 3
+    pin 4
+    pin 5

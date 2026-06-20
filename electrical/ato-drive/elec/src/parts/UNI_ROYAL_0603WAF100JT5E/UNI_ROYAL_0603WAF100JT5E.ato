@@ -1,0 +1,21 @@
+import has_datasheet
+import has_designator_prefix
+import has_part_picked
+import is_atomic_part
+import is_auto_generated
+
+component UNI_ROYAL_0603WAF100JT5E_package:
+    """10Ω (10R0) ±1%"""
+
+    # This trait marks this file as auto-generated
+    # If you want to manually change it, remove the trait
+    trait is_auto_generated<system="ato_part", source="easyeda:C22859", date="2026-06-20T15:40:38.472381+00:00", checksum="554195261be159f2938b5189368077bfae06e6a6a77fa4c8f514e57a6a096daf">
+
+    trait is_atomic_part<manufacturer="UNI-ROYAL", partnumber="0603WAF100JT5E", footprint="R0603.kicad_mod", symbol="0603WAF100JT5E.kicad_sym", model="R0603.STEP">
+    trait has_part_picked::by_supplier<supplier_id="lcsc", supplier_partno="C22859", manufacturer="UNI-ROYAL", partno="0603WAF100JT5E">
+    trait has_designator_prefix<prefix="R">
+    trait has_datasheet<datasheet="https://www.lcsc.com/datasheet/lcsc_datasheet_2206010130_UNI-ROYAL-Uniroyal-Elec-0603WAF100JT5E_C22859.pdf">
+
+    # pins
+    pin 2
+    pin 1

@@ -1,0 +1,21 @@
+import has_datasheet
+import has_designator_prefix
+import has_part_picked
+import is_atomic_part
+import is_auto_generated
+
+component MDD_Microdiode_Electronics_SS34_package:
+    """SS34"""
+
+    # This trait marks this file as auto-generated
+    # If you want to manually change it, remove the trait
+    trait is_auto_generated<system="ato_part", source="easyeda:C8678", date="2026-06-20T15:37:10.201054+00:00", checksum="bb97029140041600c845c28de61b226dd08dedd97852bfb3b9a451b0eca4623b">
+
+    trait is_atomic_part<manufacturer="MDD（Microdiode Electronics）", partnumber="SS34", footprint="SMA_L4.3-W2.6-LS5.2-RD.kicad_mod", symbol="SS34_C8678.kicad_sym", model="SMA_L4.3-W2.6-LS5.2-RD.step">
+    trait has_part_picked::by_supplier<supplier_id="lcsc", supplier_partno="C8678", manufacturer="MDD（Microdiode Electronics）", partno="SS34">
+    trait has_designator_prefix<prefix="D">
+    trait has_datasheet<datasheet="https://www.lcsc.com/datasheet/lcsc_datasheet_2407101107_MDD-Microdiode-Semiconductor-SS34_C8678.pdf">
+
+    # pins
+    signal A ~ pin 2
+    signal K ~ pin 1
